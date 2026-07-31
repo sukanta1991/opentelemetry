@@ -131,7 +131,8 @@ Press **F5** to launch the Extension Development Host.
 
 Issues and pull requests are welcome at
 [github.com/sukanta1991/opentelemetry](https://github.com/sukanta1991/opentelemetry).
-See [`PUBLISHING.md`](./PUBLISHING.md) for the release process.
+Please read [`CONTRIBUTING.md`](./CONTRIBUTING.md) and our
+[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) first.
 
 ## 📄 License
 

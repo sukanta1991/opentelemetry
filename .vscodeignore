@@ -9,7 +9,8 @@ tsconfig.json
 .gitignore
 .prettierrc
 **/*.map
-PUBLISHING.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
 *.vsix
 node_modules/typescript/**
 node_modules/esbuild/**
