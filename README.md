@@ -7,10 +7,10 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry"><img alt="Version" src="https://img.shields.io/visual-studio-marketplace/v/SukantaSaha.vscode-opentelemetry?color=1e88e5&label=Marketplace&logo=visual-studio-code"></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry"><img alt="Installs" src="https://img.shields.io/visual-studio-marketplace/i/SukantaSaha.vscode-opentelemetry?color=1e88e5"></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry"><img alt="Downloads" src="https://img.shields.io/visual-studio-marketplace/d/SukantaSaha.vscode-opentelemetry?color=1e88e5"></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry"><img alt="Rating" src="https://img.shields.io/visual-studio-marketplace/r/SukantaSaha.vscode-opentelemetry?color=1e88e5"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry"><img alt="Version" src="https://img.shields.io/visual-studio-marketplace/v/SukantaSaha.opentelemetry?color=1e88e5&label=Marketplace&logo=visual-studio-code"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry"><img alt="Installs" src="https://img.shields.io/visual-studio-marketplace/i/SukantaSaha.opentelemetry?color=1e88e5"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry"><img alt="Downloads" src="https://img.shields.io/visual-studio-marketplace/d/SukantaSaha.opentelemetry?color=1e88e5"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry"><img alt="Rating" src="https://img.shields.io/visual-studio-marketplace/r/SukantaSaha.opentelemetry?color=1e88e5"></a>
   <a href="https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
 </p>
@@ -46,7 +46,7 @@ JetBrains Rider OpenTelemetry plugin.
 
 1. **Install** from the Extensions view (search “OpenTelemetry”), or:
    ```bash
-   code --install-extension SukantaSaha.vscode-opentelemetry
+   code --install-extension SukantaSaha.opentelemetry
    ```
 2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or use the
    status bar item). The status bar shows the active gRPC/HTTP ports.
