@@ -275,9 +275,9 @@
     "compile": "tsc -p ./ --noEmit",
     "typecheck": "tsc -p ./ --noEmit",
     "lint": "eslint src --ext ts",
-    "test:smoke": "ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' test/integration/receiver.smoke.ts",
-    "test:activate": "ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' test/e2e/activate.test.ts",
-    "test:unit": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
+    "test:smoke": "ts-node test/integration/receiver.smoke.ts",
+    "test:activate": "ts-node test/e2e/activate.test.ts",
+    "test:unit": "mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
     "test": "npm run build && npm run test:unit && npm run test:smoke && npm run test:activate",
     "package": "vsce package",
     "publish": "vsce publish"
