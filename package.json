@@ -1,0 +1,304 @@
+{
+  "name": "vscode-opentelemetry",
+  "displayName": "OpenTelemetry",
+  "description": "Runtime observability inside VS Code: collect and explore OpenTelemetry logs, metrics, traces, spans, and a service map via an embedded OTLP receiver.",
+  "version": "0.1.3",
+  "publisher": "SukantaSaha",
+  "author": "Sukanta Saha",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sukanta1991/opentelemetry"
+  },
+  "bugs": {
+    "url": "https://github.com/sukanta1991/opentelemetry/issues"
+  },
+  "homepage": "https://github.com/sukanta1991/opentelemetry#readme",
+  "qna": "marketplace",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "opentelemetry",
+    "otlp",
+    "observability",
+    "tracing",
+    "metrics",
+    "logs"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "otel",
+          "title": "OpenTelemetry",
+          "icon": "media/otel.svg"
+        }
+      ]
+    },
+    "views": {
+      "otel": [
+        {
+          "id": "otel.instances",
+          "name": "Instances"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "otel.instances",
+        "contents": "The OpenTelemetry receiver is not running.\n[Start receiver](command:otel.start)\n\nApps that export OTLP to the receiver endpoint will appear here once it is running.",
+        "when": "!otel.running"
+      },
+      {
+        "view": "otel.instances",
+        "contents": "The OpenTelemetry receiver is running and waiting for data.\nApps that export OTLP to the receiver endpoint will appear here.\n[Copy endpoint](command:otel.copyEndpoint)\n[Stop receiver](command:otel.stop)",
+        "when": "otel.running"
+      }
+    ],
+    "commands": [
+      {
+        "command": "otel.start",
+        "title": "Start Receiver",
+        "category": "OpenTelemetry",
+        "icon": "$(play)"
+      },
+      {
+        "command": "otel.stop",
+        "title": "Stop Receiver",
+        "category": "OpenTelemetry",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "otel.restart",
+        "title": "Restart Receiver",
+        "category": "OpenTelemetry",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "otel.clear",
+        "title": "Clear Collected Data",
+        "category": "OpenTelemetry",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "otel.copyEndpoint",
+        "title": "Copy OTLP Endpoint",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.copyEnvVar",
+        "title": "Copy OTLP Endpoint Environment Variable",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.openTerminalWithEnv",
+        "title": "Open Terminal With OTLP Environment",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.showSnippets",
+        "title": "Show Instrumentation Snippet",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.openSettings",
+        "title": "Open Settings",
+        "category": "OpenTelemetry",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "otel.openServiceMap",
+        "title": "Open Service Map",
+        "category": "OpenTelemetry",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "otel.openLogs",
+        "title": "Open Logs",
+        "category": "OpenTelemetry",
+        "icon": "$(output)"
+      },
+      {
+        "command": "otel.openTraces",
+        "title": "Open Traces",
+        "category": "OpenTelemetry",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "otel.openMetrics",
+        "title": "Open Metrics",
+        "category": "OpenTelemetry",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "otel.removeInstance",
+        "title": "Remove Instance",
+        "category": "OpenTelemetry",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "otel.start",
+          "when": "view == otel.instances && !otel.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "otel.stop",
+          "when": "view == otel.instances && otel.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "otel.openServiceMap",
+          "when": "view == otel.instances",
+          "group": "navigation@2"
+        },
+        {
+          "command": "otel.clear",
+          "when": "view == otel.instances",
+          "group": "navigation@3"
+        },
+        {
+          "command": "otel.openSettings",
+          "when": "view == otel.instances",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "otel.openLogs",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "inline@1"
+        },
+        {
+          "command": "otel.openTraces",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "inline@2"
+        },
+        {
+          "command": "otel.openMetrics",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "inline@3"
+        },
+        {
+          "command": "otel.openLogs",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "1_open@1"
+        },
+        {
+          "command": "otel.openTraces",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "1_open@2"
+        },
+        {
+          "command": "otel.openMetrics",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "1_open@3"
+        },
+        {
+          "command": "otel.removeInstance",
+          "when": "view == otel.instances && viewItem == otelInstance",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenTelemetry",
+      "properties": {
+        "otel.launchOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the OpenTelemetry OTLP receiver automatically when VS Code starts."
+        },
+        "otel.port.mode": {
+          "type": "string",
+          "enum": [
+            "random",
+            "fixed"
+          ],
+          "default": "fixed",
+          "description": "Whether to bind the OTLP receiver to fixed ports or randomly assigned ports."
+        },
+        "otel.port.grpc": {
+          "type": "number",
+          "default": 4317,
+          "description": "OTLP/gRPC listen port (used when otel.port.mode is 'fixed')."
+        },
+        "otel.port.http": {
+          "type": "number",
+          "default": 4318,
+          "description": "OTLP/HTTP listen port (used when otel.port.mode is 'fixed')."
+        },
+        "otel.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Address the OTLP receiver binds to. Binding beyond localhost exposes telemetry to your network."
+        },
+        "otel.overwriteEnvVars": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically inject OTEL_EXPORTER_OTLP_ENDPOINT into VS Code launch/debug configurations."
+        },
+        "otel.retention.maxLogsPerInstance": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum number of log records retained in memory per instance (oldest dropped first)."
+        },
+        "otel.retention.maxTracesPerInstance": {
+          "type": "number",
+          "default": 2000,
+          "description": "Maximum number of traces retained in memory per instance (oldest dropped first)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "compile": "tsc -p ./ --noEmit",
+    "typecheck": "tsc -p ./ --noEmit",
+    "lint": "eslint src --ext ts",
+    "test:smoke": "ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' test/integration/receiver.smoke.ts",
+    "test:activate": "ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' test/e2e/activate.test.ts",
+    "test:unit": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
+    "test": "npm run build && npm run test:unit && npm run test:smoke && npm run test:activate",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.10.9",
+    "@grpc/proto-loader": "^0.7.13",
+    "protobufjs": "^7.3.2"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^2.29.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "mocha": "^10.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
