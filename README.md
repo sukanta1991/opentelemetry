@@ -10,7 +10,7 @@ extra containers. Point any OTLP-compatible SDK at the receiver and your telemet
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -47,7 +47,7 @@ Works with any OTLP-compatible SDK — **Java, .NET, Go, Node.js, Python, Rust**
 1. **Install** from the Extensions view (search “OpenTelemetry”), or from a terminal:
 
    ```bash
-   code --install-extension SukantaSaha.vscode-opentelemetry
+   code --install-extension SukantaSaha.opentelemetry
    ```
 
 2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or start it
@@ -169,7 +169,7 @@ export/persistence is planned.
 
 ### The settings gear opens an empty page
 
-This was fixed in `0.1.4`. Update to the latest version, or open settings manually and search for
+This was fixed in `0.1.2`. Update to the latest version, or open settings manually and search for
 “OpenTelemetry”.
 
 ## Roadmap
@@ -187,8 +187,7 @@ Planned and under exploration — feedback welcome via
 Issues and pull requests are welcome at
 [github.com/sukanta1991/opentelemetry](https://github.com/sukanta1991/opentelemetry). Please read
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) and our [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) first.
-See [`PUBLISHING.md`](./PUBLISHING.md) for the release process, and
-[`CHANGELOG.md`](./CHANGELOG.md) for release notes.
+See [`CHANGELOG.md`](./CHANGELOG.md) for release notes.
 
 For contributors, from a clone:
 
