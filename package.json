@@ -33,8 +33,17 @@
     "otlp",
     "observability",
     "tracing",
+    "distributed tracing",
+    "spans",
     "metrics",
-    "logs"
+    "logs",
+    "service map",
+    "telemetry",
+    "collector",
+    "jaeger",
+    "zipkin",
+    "grafana",
+    "developer tools"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [

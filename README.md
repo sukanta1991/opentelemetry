@@ -1,84 +1,97 @@
-<h1 align="center">OpenTelemetry for VS Code</h1>
+# OpenTelemetry for VS Code
 
-<p align="center">
-  <em>Runtime observability, right inside your editor.</em><br/>
-  Collect and explore OpenTelemetry <strong>logs, metrics, traces &amp; spans</strong> and a
-  <strong>service map</strong> from any app — via an embedded OTLP receiver. No external collector required.
-</p>
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry)
+[![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-<p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry"><img alt="VS Code Marketplace" src="https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode"></a>
-  <a href="https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-</p>
+This extension brings **OpenTelemetry** debugging directly into VS Code. It runs a local **OTLP
+receiver** inside the editor that collects **logs, traces, metrics, and service relationships**
+from any application that exports OpenTelemetry data — whether the app is launched from VS Code or
+run entirely outside it.
 
----
+There's nothing else to install and run: no Jaeger, no Zipkin, no OpenTelemetry Collector, and no
+extra containers. Point any OTLP-compatible SDK at the receiver and your telemetry appears in the
+editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
+restarts.
 
-This extension embeds a local **OTLP receiver** ("Satellite service") that collects **logs,
-metrics, and traces** from any application that exports OpenTelemetry data — whether launched
-from VS Code or run externally — and lets you explore it through an instances tree, logs,
-traces/spans, metrics, and a service map. It is a language-agnostic VS Code re-imagining of the
-JetBrains Rider OpenTelemetry plugin.
+## Preview
 
-## ✨ Features
+Traces & spans — find slow or failing requests and examine them in a waterfall timeline:
 
-- **Embedded OTLP receiver** — in-process Node.js server accepting **OTLP/gRPC** (default `4317`)
-  and **OTLP/HTTP** (protobuf + JSON, default `4318`). No external collector or binaries.
-- **Instances tree** — applications (grouped by `service.name`) → instances (identified by
-  `service.instance.id` or a synthesized GUID). Remove instances from the context menu.
-- **Logs** — timestamp, level, message, and attributes with text/level/attribute filtering,
-  **Navigate To Code** (via `code.filepath`/`code.lineno`), and **Open In Editor** (JSON).
-- **Traces & spans** — filter traces by duration/ID/errors and **Examine** any trace as a span
-  **waterfall** (distributed spans across services are merged by trace ID).
-- **Metrics** — per-instance view of gauges, sums, and histograms.
-- **Service map** — architecture diagram of services, databases, queues, and external
-  dependencies derived from trace spans, refreshed as data arrives.
-- **Launch/debug integration** — auto-injects `OTEL_EXPORTER_OTLP_ENDPOINT` into VS Code
-  launch/debug configs, plus copy-endpoint commands, an OTel-enabled terminal, and per-language
-  instrumentation snippets for **external apps**.
+![Traces panel](images/preview/traces.png)
 
-> Telemetry is stored **in memory** and cleared when the receiver restarts (Phase 1).
+Logs — search and filter, then jump straight to the source line:
 
-## 📸 Screenshots
+![Logs panel](images/preview/logs.png)
 
-**Logs** — filter by text/level/attributes, with Navigate To Code and Open In Editor:
+Metrics — inspect gauges, counters, and histograms per service instance:
 
-![Logs panel](images/screenshots/logs.png)
+![Metrics panel](images/preview/metrics.png)
 
-**Traces & spans** — filter traces and examine any trace as a span waterfall:
+## What this extension does
 
-![Traces panel](images/screenshots/traces.png)
+- **Embedded OTLP receiver** — accepts **OTLP/gRPC** (default `4317`) and **OTLP/HTTP**
+  (protobuf + JSON, default `4318`).
+- **Logs** — search and filter by text, level, and attributes; resizable columns;
+  **Navigate To Code** to jump to the source line; **Open In Editor** to view a log as JSON.
+- **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
+  span waterfall. Distributed spans are merged by trace ID.
+- **Metrics** — per-instance gauges, counters/sums, and histograms.
+- **Service map** — services, databases, queues, and external dependencies inferred from spans.
+- **Instances tree** — applications grouped by `service.name`, each with its own instances.
 
-**Metrics** — per-instance gauges, sums, and histograms:
+Works with any OTLP-compatible SDK — **Java, .NET, Go, Node.js, Python, Rust**, and others.
 
-![Metrics panel](images/screenshots/metrics.png)
+## Getting started
 
-## 🚀 Quick start
+1. **Install** from the Extensions view (search “OpenTelemetry”), or from a terminal:
 
-1. **Install** from the Extensions view (search “OpenTelemetry”), or:
    ```bash
-   code --install-extension SukantaSaha.opentelemetry
+   code --install-extension SukantaSaha.vscode-opentelemetry
    ```
-2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or use the
-   status bar item). The status bar shows the active gRPC/HTTP ports.
-3. Point your app at the receiver and watch instances, logs, traces, and metrics appear.
 
-### Wire up your app
+2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or start it
+   from the status bar item). The status bar then shows the active gRPC and HTTP ports.
 
-**Launched from VS Code** — just run/debug; the OTLP endpoint env var is injected automatically
-(disable via `otel.overwriteEnvVars`).
+3. Point your application's OTLP exporter at the receiver. Its instance, logs, traces, and metrics
+   appear as data arrives.
 
-**Running externally** — point your app's OTLP exporter at the receiver. Use
-**OpenTelemetry: Copy OTLP Endpoint / Copy Environment Variable**, or **Show Instrumentation
-Snippet**, e.g.:
+### Apps launched from VS Code
+
+When you run or debug an app from VS Code, the extension automatically injects the
+`OTEL_EXPORTER_OTLP_ENDPOINT` environment variable so a configured OTLP exporter sends data to the
+receiver. You can disable this with the `otel.overwriteEnvVars` setting.
+
+### Apps running outside VS Code
+
+Point the exporter at the receiver yourself. Use the **OpenTelemetry: Copy OTLP Endpoint** or
+**Copy OTLP Endpoint Environment Variable** commands (or **Show Instrumentation Snippet** for a
+per-language example), then set:
+
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4317"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 ```
-You can also route through an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/)
-by adding the receiver as an OTLP exporter target.
 
-## 🧭 Commands
+You can also route data through an
+[OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) by adding the receiver as an
+OTLP exporter target.
+
+## Common workflows
+
+**Debug a failing request**
+
+1. Start your app and generate some traffic.
+2. Open **Traces**, tick **errors only**, and select the failed trace.
+3. Click **Examine** to open the span waterfall and find the slow or failing span.
+4. Open **Logs**, filter by text or level, and use **Navigate To Code** to jump to the source.
+
+**Understand what a service talks to**
+
+1. Generate distributed traffic (HTTP calls, database queries, queue messages).
+2. Open the **Service Map** to see services, databases, and queues and how they connect.
+
+## Commands
 
 | Command | Description |
 | --- | --- |
@@ -91,9 +104,10 @@ by adding the receiver as an OTLP exporter target.
 | `OpenTelemetry: Open Logs / Traces / Metrics` | Open a panel for the selected instance. |
 | `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
 
-Instances also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action.
+Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove
+Instance** action.
 
-## ⚙️ Settings
+## Settings
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -106,45 +120,89 @@ Instances also expose inline **Logs / Traces / Metrics** icons and a **Remove In
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 
-## 🏗️ Architecture
+Example `settings.json`:
 
-- `src/receiver/` — gRPC (`@grpc/grpc-js` + `@grpc/proto-loader`) and HTTP (`protobufjs`) OTLP
-  servers, plus the `Receiver` lifecycle facade.
-- `src/store/` — OTLP decoding and the in-memory `TelemetryStore` (applications → instances →
-  logs/traces/metrics) with ring-buffer retention and debounced change events.
-- `src/views/` — the instances `TreeDataProvider` and the Logs, Traces, Metrics, and Service Map
-  webview panels.
-- `src/integration/` — debug-config env injection and instrumentation snippets.
-- `proto/` — vendored `opentelemetry-proto` definitions (bundled into `dist/proto`).
+```json
+{
+  "otel.launchOnStartup": true,
+  "otel.port.mode": "fixed",
+  "otel.port.grpc": 4317,
+  "otel.port.http": 4318
+}
+```
 
-## 🧪 Development
+## Troubleshooting
+
+### The Instances view says the receiver isn't running
+
+The receiver does not start automatically by default. Click **Start receiver** in the Instances
+view (or the status bar), or set `otel.launchOnStartup` to `true` to start it whenever VS Code
+launches.
+
+### "Port already in use"
+
+If the configured port is busy, the extension reports the error and offers to retry on randomly
+assigned ports. You can also set `otel.port.mode` to `random`, or change `otel.port.grpc` /
+`otel.port.http` to free ports.
+
+### No telemetry appears
+
+- Confirm the exporter endpoint matches the receiver: **gRPC** uses `4317`, **HTTP** uses `4318`.
+  Set `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` or `http/protobuf`) accordingly.
+- For apps launched from VS Code, make sure `otel.overwriteEnvVars` is `true`.
+- For external apps, copy the endpoint with **OpenTelemetry: Copy OTLP Endpoint** and verify your
+  SDK is actually exporting.
+
+> **Note:** the receiver binds to `127.0.0.1` by default. A firewall prompt may appear the first
+> time it starts.
+
+### "Navigate To Code" doesn't jump anywhere
+
+Navigate To Code applies to **log entries** and requires source-location attributes
+(`code.filepath` / `code.lineno`) on the log record. If those attributes aren't present, the
+action is unavailable. It also can't navigate to third-party or decompiled code.
+
+### My collected data disappeared
+
+Telemetry is stored **in memory** and is cleared when the receiver restarts. Configurable
+export/persistence is planned.
+
+### The settings gear opens an empty page
+
+This was fixed in `0.1.4`. Update to the latest version, or open settings manually and search for
+“OpenTelemetry”.
+
+## Roadmap
+
+Planned and under exploration — feedback welcome via
+[issues](https://github.com/sukanta1991/opentelemetry/issues):
+
+- Configurable export and persistence (beyond the in-memory store)
+- Metric charts (metrics are tabular today)
+- Richer search and filtering for logs and traces, plus live tailing
+- Deeper service-map analytics (latency, error rates, throughput)
+
+## Contributing
+
+Issues and pull requests are welcome at
+[github.com/sukanta1991/opentelemetry](https://github.com/sukanta1991/opentelemetry). Please read
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) and our [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) first.
+See [`PUBLISHING.md`](./PUBLISHING.md) for the release process, and
+[`CHANGELOG.md`](./CHANGELOG.md) for release notes.
+
+For contributors, from a clone:
 
 ```bash
 npm install
-npm run build         # bundle with esbuild (copies proto assets to dist/)
-npm run watch         # rebuild on change
-npm run typecheck     # type-check only
-npm run lint          # eslint
-npm test              # build + unit + smoke + activation tests
-npm run package       # produce a .vsix
+npm run build     # bundle with esbuild
+npm run typecheck # type-check
+npm run lint      # eslint
+npm test          # unit + smoke + activation tests
+npm run package   # produce a .vsix
 ```
 
 Press **F5** to launch the Extension Development Host.
 
-## 🚧 Limitations (Phase 1)
-
-- Telemetry is in-memory only; configurable export/persistence is a planned enhancement.
-- The receiver binds to `127.0.0.1` with no TLS/auth (localhost-only by design).
-- Navigate To Code depends on `code.*` span/log attributes being present.
-- Service-map edges are heuristic (span kind + trace parent/child + semantic-convention attrs).
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome at
-[github.com/sukanta1991/opentelemetry](https://github.com/sukanta1991/opentelemetry).
-Please read [`CONTRIBUTING.md`](./CONTRIBUTING.md) and our
-[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) first.
-
-## 📄 License
+## License
 
 [MIT](./LICENSE) © Sukanta Saha
