@@ -18,15 +18,15 @@ restarts.
 
 Traces & spans — find slow or failing requests and examine them in a waterfall timeline:
 
-![Traces panel](images/preview/traces.png)
+![Traces panel](images/screenshots/traces.png)
 
 Logs — search and filter, then jump straight to the source line:
 
-![Logs panel](images/preview/logs.png)
+![Logs panel](images/screenshots/logs.png)
 
 Metrics — inspect gauges, counters, and histograms per service instance:
 
-![Metrics panel](images/preview/metrics.png)
+![Metrics panel](images/screenshots/metrics.png)
 
 ## What this extension does
 
