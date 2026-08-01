@@ -1,9 +1,5 @@
 # OpenTelemetry for VS Code
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry)
-[![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
-![License](https://img.shields.io/badge/license-MIT-green)
-
 This extension brings **OpenTelemetry** debugging directly into VS Code. It runs a local **OTLP
 receiver** inside the editor that collects **logs, traces, metrics, and service relationships**
 from any application that exports OpenTelemetry data — whether the app is launched from VS Code or
@@ -13,6 +9,10 @@ There's nothing else to install and run: no Jaeger, no Zipkin, no OpenTelemetry 
 extra containers. Point any OTLP-compatible SDK at the receiver and your telemetry appears in the
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
+
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.vscode-opentelemetry)
+[![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Preview
 
