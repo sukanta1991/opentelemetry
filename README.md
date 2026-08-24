@@ -33,7 +33,8 @@ Metrics — inspect gauges, counters, and histograms per service instance:
 - **Embedded OTLP receiver** — accepts **OTLP/gRPC** (default `4317`) and **OTLP/HTTP**
   (protobuf + JSON, default `4318`).
 - **Logs** — search and filter by text, level, and attributes; resizable columns;
-  **Navigate To Code** to jump to the source line; **Open In Editor** to view a log as JSON.
+  displayed in capture-time order (`timeMs` / `observedTimeMs`), **Navigate To Code** to jump to
+  the source line, and **Open In Editor** to view a log as JSON.
 - **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
   span waterfall. Distributed spans are merged by trace ID.
 - **Metrics** — per-instance gauges, counters/sums, and histograms.

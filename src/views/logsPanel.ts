@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
 import { LogRecord } from '../store/model';
+import { getLogTimeMs } from '../utils/logsPanelUtil';
 import { severityLabel } from './format';
 import { getNonce, htmlShell } from './webviewUtil';
 
@@ -51,16 +52,18 @@ export class LogsPanel {
       return;
     }
     this.snapshot = inst.logs.toArray();
-    const rows = this.snapshot.map((l, i) => ({
-      i,
-      time: new Date(l.timeMs || l.observedTimeMs || 0).toISOString(),
-      sev: l.severityText || severityLabel(l.severityNumber),
-      sevNum: l.severityNumber,
-      msg: renderBody(l.body),
-      attrs: summarizeAttrs(l.attrs),
-      hasCode: !!l.codeLocation,
-      traceId: l.traceId ?? '',
-    }));
+    const rows = this.snapshot
+      .map((l, i) => ({
+        i,
+        time: new Date(l.timeMs || l.observedTimeMs || 0).toISOString(),
+        sev: l.severityText || severityLabel(l.severityNumber),
+        sevNum: l.severityNumber,
+        msg: renderBody(l.body),
+        attrs: summarizeAttrs(l.attrs),
+        hasCode: !!l.codeLocation,
+        traceId: l.traceId ?? '',
+      }))
+      .sort((a, b) => getLogTimeMs(this.snapshot[a.i]) - getLogTimeMs(this.snapshot[b.i]));
     this.panel.webview.postMessage({ type: 'data', rows });
   }
 

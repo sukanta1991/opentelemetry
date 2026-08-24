@@ -287,6 +287,7 @@
     "test:smoke": "ts-node test/integration/receiver.smoke.ts",
     "test:activate": "ts-node test/e2e/activate.test.ts",
     "test:unit": "mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
+    "push-logs:out-of-order": "ts-node test/scripts/push-out-of-order-logs.ts",
     "test": "npm run build && npm run test:unit && npm run test:smoke && npm run test:activate",
     "package": "vsce package",
     "publish": "vsce publish"
