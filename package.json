@@ -273,6 +273,11 @@
           "type": "number",
           "default": 2000,
           "description": "Maximum number of traces retained in memory per instance (oldest dropped first)."
+        },
+        "otel.retention.maxMetricPointsPerSeries": {
+          "type": "number",
+          "default": 500,
+          "description": "Maximum number of time-series data points retained in memory per metric series (oldest dropped first). Controls how far back metric graphs can plot."
         }
       }
     }
@@ -282,7 +287,7 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "compile": "tsc -p ./ --noEmit",
-    "typecheck": "tsc -p ./ --noEmit",
+    "typecheck": "tsc -p ./ --noEmit && tsc -p ./tsconfig.webview.json",
     "lint": "eslint src --ext ts",
     "test:smoke": "ts-node test/integration/receiver.smoke.ts",
     "test:activate": "ts-node test/e2e/activate.test.ts",
@@ -304,11 +309,12 @@
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "@vscode/test-electron": "^2.4.0",
-    "@vscode/vsce": "^2.29.0",
-    "esbuild": "^0.21.5",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
-    "mocha": "^10.4.0",
+    "mocha": "^11.8.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "uplot": "^1.6.32"
   }
 }

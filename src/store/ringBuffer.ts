@@ -25,6 +25,10 @@ export class RingBuffer<T> {
     return this.items.slice();
   }
 
+  last(): T | undefined {
+    return this.items.length ? this.items[this.items.length - 1] : undefined;
+  }
+
   get length(): number {
     return this.items.length;
   }

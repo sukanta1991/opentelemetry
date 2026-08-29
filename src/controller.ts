@@ -14,6 +14,7 @@ function resolveProtoRoot(extensionPath: string): string {
 
 export class OtelController {
   readonly store: TelemetryStore;
+  readonly extensionUri: vscode.Uri;
   private readonly receiver: Receiver;
   private readonly statusBar: StatusBar;
   private readonly onDidChangeStateEmitter = new vscode.EventEmitter<void>();
@@ -21,9 +22,11 @@ export class OtelController {
 
   constructor(extensionPath: string) {
     const settings = readSettings();
+    this.extensionUri = vscode.Uri.file(extensionPath);
     this.store = new TelemetryStore(
       settings.maxLogsPerInstance,
-      settings.maxTracesPerInstance
+      settings.maxTracesPerInstance,
+      settings.maxMetricPointsPerSeries
     );
     this.receiver = new Receiver(resolveProtoRoot(extensionPath), this.store);
     this.statusBar = new StatusBar();
@@ -45,7 +48,11 @@ export class OtelController {
   async start(): Promise<void> {
     if (this.receiver.isRunning()) return;
     const settings = readSettings();
-    this.store.setRetention(settings.maxLogsPerInstance, settings.maxTracesPerInstance);
+    this.store.setRetention(
+      settings.maxLogsPerInstance,
+      settings.maxTracesPerInstance,
+      settings.maxMetricPointsPerSeries
+    );
     try {
       const ep = await this.receiver.start(settings);
       this.statusBar.setRunning(ep);
@@ -98,7 +105,7 @@ export class OtelController {
 
   reloadRetention(): void {
     const s = readSettings();
-    this.store.setRetention(s.maxLogsPerInstance, s.maxTracesPerInstance);
+    this.store.setRetention(s.maxLogsPerInstance, s.maxTracesPerInstance, s.maxMetricPointsPerSeries);
   }
 
   /** Endpoint apps should export to (gRPC by convention, matching OTEL default). */

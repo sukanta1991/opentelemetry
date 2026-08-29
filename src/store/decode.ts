@@ -268,6 +268,18 @@ function metricPoint(type: MetricType, dp: any): MetricDataPoint {
       bucketCounts: (dp.bucketCounts || []).map((b: any) => toNumber(b) ?? 0),
     };
   }
+  if (type === 'summary') {
+    return {
+      attrs,
+      timeMs,
+      count: toNumber(dp.count),
+      sum: toNumber(dp.sum),
+      quantiles: (dp.quantileValues || []).map((q: any) => ({
+        quantile: toNumber(q.quantile) ?? 0,
+        value: toNumber(q.value) ?? 0,
+      })),
+    };
+  }
   const value = dp.asDouble !== undefined ? toNumber(dp.asDouble) : toNumber(dp.asInt);
   return { attrs, timeMs, value };
 }

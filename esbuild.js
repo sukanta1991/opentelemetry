@@ -25,10 +25,6 @@ const copyAssetsPlugin = {
   setup(build) {
     build.onEnd(() => {
       copyDir(path.join(__dirname, 'proto'), path.join(__dirname, 'dist', 'proto'));
-      copyDir(
-        path.join(__dirname, 'src', 'views', 'webview'),
-        path.join(__dirname, 'dist', 'webview')
-      );
       console.log('[esbuild] assets copied');
     });
   },
@@ -49,12 +45,25 @@ async function main() {
     plugins: [copyAssetsPlugin],
   });
 
+  // Separate browser bundle for the Metrics panel webview (uPlot + chart app).
+  const webviewCtx = await esbuild.context({
+    entryPoints: ['src/views/webview/metricsChart.ts'],
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2020',
+    outfile: 'dist/webview/metricsChart.js',
+    sourcemap: !production,
+    minify: production,
+    logLevel: 'info',
+  });
+
   if (watch) {
-    await ctx.watch();
+    await Promise.all([ctx.watch(), webviewCtx.watch()]);
     console.log('[esbuild] watching...');
   } else {
-    await ctx.rebuild();
-    await ctx.dispose();
+    await Promise.all([ctx.rebuild(), webviewCtx.rebuild()]);
+    await Promise.all([ctx.dispose(), webviewCtx.dispose()]);
   }
 }
 

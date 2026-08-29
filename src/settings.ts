@@ -6,6 +6,7 @@ export interface OtelSettings extends ReceiverConfig {
   overwriteEnvVars: boolean;
   maxLogsPerInstance: number;
   maxTracesPerInstance: number;
+  maxMetricPointsPerSeries: number;
 }
 
 export function readSettings(): OtelSettings {
@@ -20,5 +21,6 @@ export function readSettings(): OtelSettings {
     overwriteEnvVars: c.get<boolean>('overwriteEnvVars', true),
     maxLogsPerInstance: c.get<number>('retention.maxLogsPerInstance', 5000),
     maxTracesPerInstance: c.get<number>('retention.maxTracesPerInstance', 2000),
+    maxMetricPointsPerSeries: c.get<number>('retention.maxMetricPointsPerSeries', 500),
   };
 }
