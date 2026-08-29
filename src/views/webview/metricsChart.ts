@@ -48,7 +48,11 @@ const btnGraph = el<HTMLButtonElement>('viewGraph');
 function esc(s: unknown): string {
   return s == null
     ? ''
-    : String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string);
+    : String(s).replace(
+        /[&<>"']/g,
+        (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+      );
 }
 
 function cssVar(name: string, fallback: string): string {
