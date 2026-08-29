@@ -9,12 +9,21 @@ export function getNonce(): string {
   return text;
 }
 
+export function getUri(
+  webview: vscode.Webview,
+  extensionUri: vscode.Uri,
+  ...pathSegments: string[]
+): vscode.Uri {
+  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, ...pathSegments));
+}
+
 export function htmlShell(
   webview: vscode.Webview,
   nonce: string,
   bodyHtml: string,
   scriptJs: string,
-  styleCss: string
+  styleCss: string,
+  scriptUris: vscode.Uri[] = []
 ): string {
   const csp = [
     `default-src 'none'`,
@@ -23,6 +32,10 @@ export function htmlShell(
     `script-src 'nonce-${nonce}'`,
     `font-src ${webview.cspSource}`,
   ].join('; ');
+
+  const externalScripts = scriptUris
+    .map((uri) => `<script nonce="${nonce}" src="${uri.toString()}"></script>`)
+    .join('\n');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -34,6 +47,7 @@ export function htmlShell(
 </head>
 <body>
 ${bodyHtml}
+${externalScripts}
 <script nonce="${nonce}">${scriptJs}</script>
 </body>
 </html>`;

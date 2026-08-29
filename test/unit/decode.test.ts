@@ -81,4 +81,43 @@ describe('decode', () => {
     assert.strictEqual(hist.dataPoints[0].count, 10);
     assert.deepStrictEqual(hist.dataPoints[0].bucketCounts, [4, 6]);
   });
+
+  it('decodeMetrics captures summary quantiles', () => {
+    const req = {
+      resourceMetrics: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'm' } }] },
+          scopeMetrics: [
+            {
+              metrics: [
+                {
+                  name: 'rt',
+                  summary: {
+                    dataPoints: [
+                      {
+                        count: '3',
+                        sum: 30,
+                        quantileValues: [
+                          { quantile: 0.5, value: 8 },
+                          { quantile: 0.99, value: 20 },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const [batch] = decodeMetrics(req);
+    const summary = batch.metrics.find((x) => x.name === 'rt')!;
+    assert.strictEqual(summary.type, 'summary');
+    assert.strictEqual(summary.dataPoints[0].count, 3);
+    assert.deepStrictEqual(summary.dataPoints[0].quantiles, [
+      { quantile: 0.5, value: 8 },
+      { quantile: 0.99, value: 20 },
+    ]);
+  });
 });

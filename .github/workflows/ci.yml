@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   build-and-test:
@@ -69,6 +71,11 @@ jobs:
       - name: Package extension
         run: npx @vscode/vsce package
 
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: '*.vsix'
+
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +101,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Package extension
+        run: npx @vscode/vsce package
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: '*.vsix'
 
       - name: Publish to VS Code Marketplace
         run: npx @vscode/vsce publish

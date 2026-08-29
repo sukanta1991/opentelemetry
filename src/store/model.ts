@@ -71,6 +71,11 @@ export interface Span {
   scope?: string;
 }
 
+export interface MetricQuantile {
+  quantile: number;
+  value: number;
+}
+
 export interface MetricDataPoint {
   attrs: KeyValueMap;
   timeMs: number;
@@ -79,6 +84,13 @@ export interface MetricDataPoint {
   sum?: number;
   bucketBounds?: number[];
   bucketCounts?: number[];
+  quantiles?: MetricQuantile[];
+}
+
+// A single sampled value in a metric series' time-ordered history.
+export interface MetricSeriesPoint {
+  timeMs: number;
+  value: number;
 }
 
 export type MetricType =

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { Metric } from '../store/model';
-import { getNonce, htmlShell } from './webviewUtil';
+import { KeyValueMap, Metric, MetricType } from '../store/model';
+import { getNonce, getUri, htmlShell } from './webviewUtil';
 
 export class MetricsPanel {
   private static panels = new Map<string, MetricsPanel>();
@@ -18,7 +18,11 @@ export class MetricsPanel {
       'otel.metrics',
       inst ? `Metrics: ${inst.serviceName}` : 'Metrics',
       vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
+      }
     );
     MetricsPanel.panels.set(instanceId, new MetricsPanel(panel, controller, instanceId));
   }
@@ -28,7 +32,8 @@ export class MetricsPanel {
     private readonly controller: OtelController,
     private readonly instanceId: string
   ) {
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, SCRIPT, STYLE);
+    const scriptUri = getUri(this.panel.webview, controller.extensionUri, 'dist', 'webview', 'metricsChart.js');
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
       if (m?.type === 'ready') this.postData();
@@ -51,8 +56,14 @@ export class MetricsPanel {
         unit: m.unit ?? '',
         description: m.description ?? '',
         points: summarizePoints(m),
+        graph: this.buildGraph(m),
       }));
     this.panel.webview.postMessage({ type: 'data', metrics });
+  }
+
+  private buildGraph(m: Metric): Graph {
+    if (m.type === 'histogram') return histogramBars(m);
+    return lineGraph(this.controller.store.getMetricSeries(this.instanceId, m.name), m.type);
   }
 
   private dispose(): void {
@@ -60,6 +71,56 @@ export class MetricsPanel {
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
   }
+}
+
+type Graph =
+  | { kind: 'line'; xs: number[]; series: { label: string; ys: (number | null)[] }[] }
+  | { kind: 'bar'; categories: string[]; values: number[] }
+  | null;
+
+function seriesLabel(attrs: KeyValueMap, field: string, type: MetricType): string {
+  const a = labels(attrs);
+  if (type === 'summary') return a ? `${field} · ${a}` : field;
+  if (field !== 'value') return a ? `${field} · ${a}` : field;
+  return a || 'value';
+}
+
+// Merge all series of a metric onto a shared, sorted time axis (seconds) for uPlot.
+function lineGraph(
+  series: { attrs: KeyValueMap; field: string; data: { timeMs: number; value: number }[] }[],
+  type: MetricType
+): Graph {
+  const nonEmpty = series.filter((s) => s.data.length > 0);
+  if (!nonEmpty.length) return null;
+  const times = new Set<number>();
+  for (const s of nonEmpty) for (const p of s.data) times.add(p.timeMs);
+  const xs = [...times].sort((a, b) => a - b);
+  const index = new Map(xs.map((t, i) => [t, i]));
+  const out = nonEmpty.map((s) => {
+    const ys: (number | null)[] = new Array(xs.length).fill(null);
+    for (const p of s.data) ys[index.get(p.timeMs)!] = p.value;
+    return { label: seriesLabel(s.attrs, s.field, type), ys };
+  });
+  return { kind: 'line', xs: xs.map((t) => t / 1000), series: out };
+}
+
+function histogramBars(m: Metric): Graph {
+  const dp = m.dataPoints.find((d) => (d.bucketCounts?.length ?? 0) > 0);
+  if (!dp || !dp.bucketCounts) return null;
+  const bounds = dp.bucketBounds ?? [];
+  const counts = dp.bucketCounts;
+  const categories = counts.map((_, i) => {
+    if (counts.length === 1) return 'all';
+    if (i === 0) return `≤${fmtBound(bounds[0])}`;
+    if (i === counts.length - 1) return `>${fmtBound(bounds[bounds.length - 1])}`;
+    return `${fmtBound(bounds[i - 1])}–${fmtBound(bounds[i])}`;
+  });
+  return { kind: 'bar', categories, values: counts };
+}
+
+function fmtBound(n: number | undefined): string {
+  if (n === undefined || !isFinite(n)) return '∞';
+  return String(round(n));
 }
 
 function labels(attrs: Record<string, any>): string {
@@ -88,51 +149,69 @@ function round(n: number): number {
 }
 
 const STYLE = `
+  /* uPlot (bundled) */
+  .uplot, .uplot *, .uplot *::before, .uplot *::after { box-sizing: border-box; }
+  .uplot { font-family: var(--vscode-font-family); line-height: 1.5; width: 100%; max-width: 100%; }
+  .u-title { text-align: center; font-size: 13px; font-weight: bold; }
+  .u-wrap { position: relative; user-select: none; }
+  .u-over, .u-under { position: absolute; }
+  .u-under { overflow: hidden; }
+  .uplot canvas { display: block; position: relative; width: 100%; height: 100%; }
+  .u-axis { position: absolute; }
+  .u-legend { font-size: 11px; margin: auto; text-align: center; max-width: 100%; }
+  .u-inline { display: block; }
+  .u-inline * { display: inline-block; }
+  .u-inline tr { margin-right: 16px; }
+  .u-legend th { font-weight: 600; }
+  .u-legend th > * { vertical-align: middle; display: inline-block; }
+  .u-legend .u-marker { width: 1em; height: 1em; margin-right: 4px; background-clip: padding-box !important; }
+  .u-inline.u-live th::after { content: ":"; vertical-align: middle; }
+  .u-inline:not(.u-live) .u-value { display: none; }
+  .u-series > * { padding: 4px; }
+  .u-series th { cursor: pointer; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .u-legend .u-off > * { opacity: 0.3; }
+  .u-select { background: rgba(0,0,0,0.07); position: absolute; pointer-events: none; }
+  .u-cursor-x, .u-cursor-y { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+  .u-hz .u-cursor-x, .u-vt .u-cursor-y { height: 100%; border-right: 1px dashed #607D8B; }
+  .u-hz .u-cursor-y, .u-vt .u-cursor-x { width: 100%; border-bottom: 1px dashed #607D8B; }
+  .u-cursor-pt { position: absolute; top: 0; left: 0; border-radius: 50%; border: 0 solid; pointer-events: none; will-change: transform; background-clip: padding-box !important; }
+  .u-axis.u-off, .u-select.u-off, .u-cursor-x.u-off, .u-cursor-y.u-off, .u-cursor-pt.u-off { display: none; }
+
+  /* Metrics panel */
   .type-badge { font-size: 0.8em; padding: 0 5px; border-radius: 2px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   td.name { font-family: var(--vscode-editor-font-family, monospace); }
   .pt { display:block; }
   .pt .lbl { color: var(--vscode-descriptionForeground); }
+  .seg { display: inline-flex; border: 1px solid var(--vscode-panel-border); border-radius: 3px; overflow: hidden; }
+  .seg button { border-radius: 0; }
+  .seg button.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .seg button:not(.active) { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  .charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; padding: 12px; }
+  .card { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 8px; background: var(--vscode-editor-background); overflow: hidden; min-width: 0; }
+  .card-head { display: flex; gap: 6px; align-items: baseline; margin-bottom: 6px; }
+  .card-title { font-family: var(--vscode-editor-font-family, monospace); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-unit { font-size: 0.85em; }
+  .card-body { min-height: 180px; overflow: hidden; min-width: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 2px 2px; font-size: 11px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; color: var(--vscode-descriptionForeground); }
+  .legend-item .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+  .legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+  #graphWrap[data-empty="true"] .charts-grid::after { content: "No graphable series yet for the current filter."; color: var(--vscode-descriptionForeground); padding: 24px; }
 `;
 
 const BODY = `
 <div class="toolbar">
   <input id="q" type="text" placeholder="Filter metric name…" style="min-width:200px" />
+  <span class="seg" role="group" aria-label="View mode">
+    <button id="viewTable" class="secondary active" title="Table view">Table</button>
+    <button id="viewGraph" class="secondary" title="Graph view">Graph</button>
+  </span>
   <span id="count" class="muted count" style="margin-left:auto"></span>
 </div>
-<div class="rows"><table><thead>
+<div id="tableWrap" class="rows"><table><thead>
   <tr><th style="width:32%">Metric</th><th style="width:110px">Type</th><th style="width:70px">Unit</th><th>Data points (latest)</th></tr>
-</thead><tbody id="tbody"></tbody></table>
+</thead><tbody id="tbody"></tbody></table></div>
+<div id="graphWrap" class="rows" style="display:none"><div id="charts" class="charts-grid"></div></div>
 <div id="empty" class="empty">Waiting for metrics…</div>
-</div>
 `;
 
-const SCRIPT = `
-const vscode = acquireVsCodeApi();
-let metrics = [];
-const tbody=document.getElementById('tbody');
-const empty=document.getElementById('empty');
-const q=document.getElementById('q');
-const count=document.getElementById('count');
-function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-function apply(){
-  const f=q.value.toLowerCase();
-  const rows=metrics.filter(m=>!f||m.name.toLowerCase().includes(f));
-  tbody.innerHTML='';
-  const frag=document.createDocumentFragment();
-  for(const m of rows){
-    const tr=document.createElement('tr');
-    const pts=m.points.map(p=>'<span class="pt"><span class="lbl">'+esc(p.labels||'(no labels)')+'</span> → '+esc(p.value)+'</span>').join('');
-    tr.innerHTML='<td class="name" title="'+esc(m.description)+'">'+esc(m.name)+'</td>'+
-      '<td><span class="type-badge">'+esc(m.type)+'</span></td>'+
-      '<td class="muted">'+esc(m.unit)+'</td>'+
-      '<td>'+pts+'</td>';
-    frag.appendChild(tr);
-  }
-  tbody.appendChild(frag);
-  count.textContent=rows.length+' of '+metrics.length+' metrics';
-  empty.style.display=metrics.length?'none':'block';
-}
-q.addEventListener('input', apply);
-window.addEventListener('message', e=>{ const m=e.data; if(m.type==='data'){ metrics=m.metrics; apply(); }});
-vscode.postMessage({type:'ready'});
-`;

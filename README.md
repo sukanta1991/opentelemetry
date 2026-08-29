@@ -24,9 +24,15 @@ Logs — search and filter, then jump straight to the source line:
 
 ![Logs panel](images/screenshots/logs.png)
 
-Metrics — inspect gauges, counters, and histograms per service instance:
+Metrics — inspect gauges, counters, and histograms per service instance, in a table or as
+time-series graphs:
 
 ![Metrics panel](images/screenshots/metrics.png)
+
+The **Graph** view renders each metric as a chart — line charts for gauges/sums and summary
+quantiles, bar charts for histogram buckets — with theme-aware colors and hover tooltips:
+
+![Metrics graph view](images/screenshots/metrics-graph.png)
 
 ## What this extension does
 
@@ -37,7 +43,14 @@ Metrics — inspect gauges, counters, and histograms per service instance:
   the source line, and **Open In Editor** to view a log as JSON.
 - **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
   span waterfall. Distributed spans are merged by trace ID.
-- **Metrics** — per-instance gauges, counters/sums, and histograms.
+- **Metrics** — per-instance gauges, counters/sums, and histograms with a **Table | Graph**
+  toggle. The Graph view plots time-series history built up as telemetry streams in:
+  - **Gauges & sums** → multi-series line charts (one line per attribute set), on a shared time axis.
+  - **Summaries** → a line per quantile.
+  - **Histograms** → bar charts of the latest bucket distribution.
+  - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and
+    truncate long series labels with a full-text tooltip on hover. History depth is bounded by
+    `otel.retention.maxMetricPointsPerSeries`.
 - **Service map** — services, databases, queues, and external dependencies inferred from spans.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
 
@@ -120,6 +133,7 @@ Instance** action.
 | `otel.overwriteEnvVars` | `true` | Inject the OTLP endpoint into launch/debug configs. |
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
+| `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
 
 Example `settings.json`:
 
@@ -179,7 +193,6 @@ Planned and under exploration — feedback welcome via
 [issues](https://github.com/sukanta1991/opentelemetry/issues):
 
 - Configurable export and persistence (beyond the in-memory store)
-- Metric charts (metrics are tabular today)
 - Richer search and filtering for logs and traces, plus live tailing
 - Deeper service-map analytics (latency, error rates, throughput)
 

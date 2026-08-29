@@ -7,6 +7,7 @@ import {
   KeyValueMap,
   LogRecord,
   Metric,
+  MetricSeriesPoint,
   ResourceInfo,
   ResourceLogs,
   ResourceMetrics,
@@ -16,6 +17,14 @@ import {
 } from './model';
 import { RingBuffer } from './ringBuffer';
 
+// Time-ordered history for one metric series (a metric name + attribute set + field).
+export interface MetricSeries {
+  metricName: string;
+  attrs: KeyValueMap;
+  field: string;
+  points: RingBuffer<MetricSeriesPoint>;
+}
+
 export interface Instance {
   id: string;
   serviceName: string;
@@ -24,6 +33,7 @@ export interface Instance {
   logs: RingBuffer<LogRecord>;
   traces: Map<string, Trace>;
   metrics: Map<string, Metric>;
+  metricSeries: Map<string, MetricSeries>;
   firstSeen: number;
   lastSeen: number;
   peer?: string;
@@ -44,10 +54,14 @@ export class TelemetryStore {
   private fireTimer: NodeJS.Timeout | undefined;
   private maxLogs: number;
   private maxTraces: number;
+  private maxMetricPoints: number;
+  private maxMetricSeries: number;
 
-  constructor(maxLogs = 5000, maxTraces = 2000) {
+  constructor(maxLogs = 5000, maxTraces = 2000, maxMetricPoints = 500, maxMetricSeries = 200) {
     this.maxLogs = maxLogs;
     this.maxTraces = maxTraces;
+    this.maxMetricPoints = maxMetricPoints;
+    this.maxMetricSeries = maxMetricSeries;
   }
 
   onDidChange(listener: Listener): { dispose(): void } {
@@ -69,12 +83,16 @@ export class TelemetryStore {
     }, 150);
   }
 
-  setRetention(maxLogs: number, maxTraces: number): void {
+  setRetention(maxLogs: number, maxTraces: number, maxMetricPoints?: number): void {
     this.maxLogs = Math.max(1, maxLogs);
     this.maxTraces = Math.max(1, maxTraces);
+    if (maxMetricPoints !== undefined) this.maxMetricPoints = Math.max(1, maxMetricPoints);
     for (const inst of this.instances.values()) {
       inst.logs.setCapacity(this.maxLogs);
       this.capTraces(inst);
+      for (const series of inst.metricSeries.values()) {
+        series.points.setCapacity(this.maxMetricPoints);
+      }
     }
   }
 
@@ -140,6 +158,7 @@ export class TelemetryStore {
         logs: new RingBuffer<LogRecord>(this.maxLogs),
         traces: new Map(),
         metrics: new Map(),
+        metricSeries: new Map(),
         firstSeen: now,
         lastSeen: now,
         peer,
@@ -233,10 +252,90 @@ export class TelemetryStore {
         } else {
           inst.metrics.set(metric.name, metric);
         }
+        this.recordSeries(inst, metric);
         changed = true;
       }
     }
     if (changed) this.scheduleFire();
+  }
+
+  /** Append the scalar values of a metric's data points into their per-series history. */
+  private recordSeries(inst: Instance, metric: Metric): void {
+    for (const dp of metric.dataPoints) {
+      if (metric.type === 'summary') {
+        for (const q of dp.quantiles ?? []) {
+          this.pushSeries(inst, metric.name, dp.attrs, `q${q.quantile}`, dp.timeMs, q.value);
+        }
+        if (dp.count !== undefined) {
+          this.pushSeries(inst, metric.name, dp.attrs, 'count', dp.timeMs, dp.count);
+        }
+      } else if (metric.type === 'histogram' || metric.type === 'exponentialHistogram') {
+        if (dp.count !== undefined) {
+          this.pushSeries(inst, metric.name, dp.attrs, 'count', dp.timeMs, dp.count);
+        }
+        if (dp.sum !== undefined) {
+          this.pushSeries(inst, metric.name, dp.attrs, 'sum', dp.timeMs, dp.sum);
+        }
+      } else if (dp.value !== undefined) {
+        this.pushSeries(inst, metric.name, dp.attrs, 'value', dp.timeMs, dp.value);
+      }
+    }
+  }
+
+  private pushSeries(
+    inst: Instance,
+    metricName: string,
+    attrs: KeyValueMap,
+    field: string,
+    timeMs: number,
+    value: number
+  ): void {
+    const key = this.seriesKey(metricName, attrs, field);
+    let series = inst.metricSeries.get(key);
+    if (!series) {
+      if (inst.metricSeries.size >= this.maxMetricSeries) {
+        const oldest = inst.metricSeries.keys().next().value as string | undefined;
+        if (oldest !== undefined) inst.metricSeries.delete(oldest);
+      }
+      series = {
+        metricName,
+        attrs,
+        field,
+        points: new RingBuffer<MetricSeriesPoint>(this.maxMetricPoints),
+      };
+      inst.metricSeries.set(key, series);
+    }
+    // Drop duplicate/out-of-order re-exports of the same timestamp.
+    const last = series.points.last();
+    if (last && timeMs <= last.timeMs) return;
+    series.points.push({ timeMs, value });
+  }
+
+  private seriesKey(metricName: string, attrs: KeyValueMap, field: string): string {
+    const hash = createHash('sha1');
+    for (const k of Object.keys(attrs).sort()) {
+      hash.update(k);
+      hash.update('=');
+      hash.update(String(attrs[k]));
+      hash.update(';');
+    }
+    return `${metricName}\u0000${field}\u0000${hash.digest('hex').slice(0, 16)}`;
+  }
+
+  /** Time-series history for all series of a metric, for charting. */
+  getMetricSeries(
+    instanceId: string,
+    metricName: string
+  ): { attrs: KeyValueMap; field: string; data: MetricSeriesPoint[] }[] {
+    const inst = this.instances.get(instanceId);
+    if (!inst) return [];
+    const out: { attrs: KeyValueMap; field: string; data: MetricSeriesPoint[] }[] = [];
+    for (const series of inst.metricSeries.values()) {
+      if (series.metricName === metricName) {
+        out.push({ attrs: series.attrs, field: series.field, data: series.points.toArray() });
+      }
+    }
+    return out;
   }
 
   /** Merge spans for a trace id across all instances, tagging each with its service. */

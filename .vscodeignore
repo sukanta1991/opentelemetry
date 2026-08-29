@@ -5,6 +5,7 @@ src/**
 test/**
 esbuild.js
 tsconfig.json
+tsconfig.webview.json
 .eslintrc.js
 .gitignore
 .prettierrc
