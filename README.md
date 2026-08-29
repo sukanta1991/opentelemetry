@@ -10,7 +10,7 @@ extra containers. Point any OTLP-compatible SDK at the receiver and your telemet
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.1.3-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.2.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
