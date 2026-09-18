@@ -29,8 +29,9 @@ time-series graphs:
 
 ![Metrics panel](images/screenshots/metrics.png)
 
-The **Graph** view renders each metric as a chart — line charts for gauges/sums and summary
-quantiles, bar charts for histogram buckets — with theme-aware colors and hover tooltips:
+The **Graph** view renders each metric as a chart, and a **per-graph dropdown** lets you pick
+the chart type from options scoped to the metric's OTEL type (e.g. counters offer line, rate,
+stacked-area, area, bar; histograms offer bucket bars). The choice is remembered per metric:
 
 ![Metrics graph view](images/screenshots/metrics-graph.png)
 
@@ -48,6 +49,23 @@ quantiles, bar charts for histogram buckets — with theme-aware colors and hove
   - **Gauges & sums** → multi-series line charts (one line per attribute set), on a shared time axis.
   - **Summaries** → a line per quantile.
   - **Histograms** → bar charts of the latest bucket distribution.
+  - A **per-graph chart-type dropdown** offers views scoped to each metric's OTEL type —
+    counters and updown-counters add **rate**, **stacked-area**, **area**, and **bar** (for
+    updown-counters `rate` keeps real increases and decreases); gauges add a single-value
+    **gauge** readout; summaries add a **percentile** view; every type offers **table**. The
+    selection is remembered per metric across panel reopens.
+  - An **Over time** dropdown aggregates each series into fixed-width time buckets
+    (avg / min / max / sum / last / count / std-dev / P50 / P90 / P95 / P99), reshaping the
+    plotted line rather than adding a readout; **Raw** plots every sample. Multi-series scalar
+    metrics also get a **Series** dropdown (sum / avg / min / max / P95 across label sets).
+  - A **time-range picker** in the toolbar (1 min … 2 hour) applies to every graph at once and
+    pins the x-axis to the selected window, alongside a **Step** control for the aggregation
+    bucket width. **Auto** follows the range; pick a coarser step to gather several samples per
+    bucket. The width actually used is shown beside the Over time dropdown. A hint appears when
+    the retained history is shorter than the chosen range.
+  - ⚠️ The aggregation, time-range and step controls are **experimental** while we gather
+    feedback — their defaults and behaviour may change. Please report anything surprising at
+    [github.com/sukanta1991/opentelemetry/issues](https://github.com/sukanta1991/opentelemetry/issues).
   - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and
     truncate long series labels with a full-text tooltip on hover. History depth is bounded by
     `otel.retention.maxMetricPointsPerSeries`.
