@@ -273,6 +273,7 @@ function render(rows){
       '<td class="msg">'+esc(r.msg)+(r.hasCode?' <span class="muted">[code]</span>':'')+'</td>'+
       '<td class="attrs">'+esc(r.attrs)+'</td>';
     tr.addEventListener('click', ()=>{ selected = r.i; apply(); });
+    tr.addEventListener('dblclick', ()=>{ selected = r.i; vscode.postMessage({type:'openInEditor', index:r.i}); });
     frag.appendChild(tr);
   }
   tbody.appendChild(frag);
