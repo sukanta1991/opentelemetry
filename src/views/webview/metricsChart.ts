@@ -91,10 +91,19 @@ const KIND_LABEL: Record<ChartKind, string> = {
   table: 'Table',
 };
 
+type XRange = [number, number];
+
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
 // One active uPlot per metric card, so a single card can re-render on its own.
-const chartByMetric = new Map<string, uPlot>();
+// `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
+// closure reads, so the window can slide without rebuilding the plot.
+interface CardChart {
+  chart: uPlot;
+  sig: string;
+  xRange: XRange;
+}
+const chartByMetric = new Map<string, CardChart>();
 // Per-metric chart/aggregation/reduce choices, persisted across panel reloads.
 interface Selection {
   chart?: ChartKind;
@@ -105,6 +114,8 @@ interface PanelState {
   selections?: Record<string, unknown>;
   range?: unknown;
   step?: unknown;
+  query?: unknown;
+  view?: unknown;
 }
 const savedState = (vscode.getState() as PanelState | null) ?? {};
 const selections = new Map<string, Selection>(loadSelections(savedState.selections));
@@ -164,15 +175,19 @@ function filtered(): MetricVM[] {
   return metrics.filter((m) => !f || m.name.toLowerCase().includes(f));
 }
 
-function destroyCharts(): void {
-  for (const c of chartByMetric.values()) {
-    try {
-      c.destroy();
-    } catch {
-      /* ignore */
-    }
+function destroyChart(name: string): void {
+  const entry = chartByMetric.get(name);
+  if (!entry) return;
+  try {
+    entry.chart.destroy();
+  } catch {
+    /* ignore */
   }
-  chartByMetric.clear();
+  chartByMetric.delete(name);
+}
+
+function destroyCharts(): void {
+  for (const name of Array.from(chartByMetric.keys())) destroyChart(name);
 }
 
 function loadSelections(saved: Record<string, unknown> | undefined): [string, Selection][] {
@@ -202,7 +217,13 @@ function loadSelections(saved: Record<string, unknown> | undefined): [string, Se
 }
 
 function persistState(): void {
-  vscode.setState({ selections: Object.fromEntries(selections), range, step });
+  vscode.setState({
+    selections: Object.fromEntries(selections),
+    range,
+    step,
+    query: q.value,
+    view,
+  });
 }
 
 function setSelection(name: string, patch: Selection): void {
@@ -242,6 +263,7 @@ function reduceFor(m: MetricVM): ReduceKind {
 
 
 function renderTable(rows: MetricVM[]): void {
+  const scroll = tableWrap.scrollTop;
   tbody.innerHTML = '';
   const frag = document.createDocumentFragment();
   for (const m of rows) {
@@ -274,6 +296,7 @@ function renderTable(rows: MetricVM[]): void {
     frag.appendChild(tr);
   }
   tbody.appendChild(frag);
+  if (tableWrap.scrollTop !== scroll) tableWrap.scrollTop = scroll;
 }
 
 // The badges were dropped from the header to give the name full width; their content
@@ -287,6 +310,30 @@ function makeCard(m: MetricVM): HTMLElement {
   const card = document.createElement('div');
   card.className = 'card';
   card.setAttribute('data-metric', m.name);
+  card.setAttribute('data-head', headSig(m));
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  card.appendChild(makeHead(m));
+  card.appendChild(body);
+  return card;
+}
+
+// Everything about the header that is derived from the metric rather than from user
+// choice. When this changes the header has to be rebuilt; otherwise it is left alone so
+// an open dropdown survives a data push.
+function headSig(m: MetricVM): string {
+  return [m.presentedType, canReduce(m) ? '1' : '0', m.type, m.unit, m.description].join('|');
+}
+
+function syncCardHead(card: HTMLElement, m: MetricVM): void {
+  const sig = headSig(m);
+  if (card.getAttribute('data-head') === sig) return;
+  card.setAttribute('data-head', sig);
+  const head = card.querySelector('.card-head');
+  if (head) card.replaceChild(makeHead(m), head);
+}
+
+function makeHead(m: MetricVM): HTMLElement {
   const head = document.createElement('div');
   head.className = 'card-head';
   const title = document.createElement('span');
@@ -306,11 +353,7 @@ function makeCard(m: MetricVM): HTMLElement {
   if (canReduce(m)) controls.appendChild(makeReduceSelect(m));
   head.appendChild(title);
   head.appendChild(controls);
-  const body = document.createElement('div');
-  body.className = 'card-body';
-  card.appendChild(head);
-  card.appendChild(body);
-  return card;
+  return head;
 }
 
 // Chart-kind dropdown scoped to the metric's presented type (options from the registry).
@@ -430,7 +473,34 @@ function latest(ys: (number | null)[]): number | null {
   return null;
 }
 
-type XRange = [number, number];
+type SeriesYs = (number | null)[];
+
+// Point visibility is resolved per draw rather than baked in at construction, so a series
+// that turns sparse (or stops being sparse) stays correct across an in-place setData.
+const showPoints = (u: uPlot, seriesIdx: number): boolean =>
+  hasIsolatedPoints(u.data[seriesIdx] as SeriesYs);
+
+function lineData(g: LineGraph): uPlot.AlignedData {
+  return [g.xs, ...g.series.map((s) => s.ys)] as uPlot.AlignedData;
+}
+
+// Largest band painted first so lower layers sit on top.
+function stackedOrder(g: LineGraph): number[] {
+  return g.series.map((_, i) => i).reverse();
+}
+
+function stackedData(g: LineGraph): uPlot.AlignedData {
+  const bands = stack(g.series.map((s) => s.ys));
+  return [g.xs, ...stackedOrder(g).map((i) => bands[i])] as uPlot.AlignedData;
+}
+
+function timeBarsData(g: LineGraph): uPlot.AlignedData {
+  return [g.xs, g.xs.map((_, i) => g.series.reduce((sum, s) => sum + (s.ys[i] ?? 0), 0))];
+}
+
+function barData(g: BarGraph): uPlot.AlignedData {
+  return [g.categories.map((_, i) => i), g.values];
+}
 
 function drawLine(
   container: HTMLElement,
@@ -442,7 +512,7 @@ function drawLine(
   const stroke = cssVar('--vscode-foreground', '#ccc');
   const grid = cssVar('--vscode-panel-border', 'rgba(128,128,128,0.2)');
   const width = containerWidth(container);
-  const data: uPlot.AlignedData = [g.xs, ...g.series.map((s) => s.ys)] as uPlot.AlignedData;
+  const data = lineData(g);
   const opts: uPlot.Options = {
     width,
     height: 180,
@@ -459,7 +529,7 @@ function drawLine(
         stroke: colors[i % colors.length],
         ...(fillAlpha != null ? { fill: toFill(colors[i % colors.length], fillAlpha) } : {}),
         width: 1.5,
-        points: { show: hasIsolatedPoints(s.ys) },
+        points: { show: showPoints },
       })),
     ],
   };
@@ -474,9 +544,7 @@ function drawStackedArea(container: HTMLElement, g: LineGraph, xRange: XRange): 
   const stroke = cssVar('--vscode-foreground', '#ccc');
   const grid = cssVar('--vscode-panel-border', 'rgba(128,128,128,0.2)');
   const width = containerWidth(container);
-  const bands = stack(g.series.map((s) => s.ys));
-  const order = bands.map((_, i) => i).reverse();
-  const data: uPlot.AlignedData = [g.xs, ...order.map((i) => bands[i])] as uPlot.AlignedData;
+  const data = stackedData(g);
   const opts: uPlot.Options = {
     width,
     height: 180,
@@ -488,12 +556,12 @@ function drawStackedArea(container: HTMLElement, g: LineGraph, xRange: XRange): 
     ],
     series: [
       {},
-      ...order.map((i) => ({
+      ...stackedOrder(g).map((i) => ({
         label: g.series[i].label || 'value',
         stroke: colors[i % colors.length],
         fill: toFill(colors[i % colors.length], 0.55),
         width: 1,
-        points: { show: hasIsolatedPoints(bands[i]) },
+        points: { show: showPoints },
       })),
     ],
   };
@@ -509,10 +577,9 @@ function drawTimeBars(container: HTMLElement, g: LineGraph, xRange: XRange): uPl
   const stroke = cssVar('--vscode-foreground', '#ccc');
   const grid = cssVar('--vscode-panel-border', 'rgba(128,128,128,0.2)');
   const width = containerWidth(container);
-  const totals = g.xs.map((_, i) => g.series.reduce((sum, s) => sum + (s.ys[i] ?? 0), 0));
   const label =
     g.series.length > 1 ? `total (${g.series.length} series)` : g.series[0]?.label || 'value';
-  const data: uPlot.AlignedData = [g.xs, totals];
+  const data = timeBarsData(g);
   const barsBuilder = (uPlot as unknown as {
     paths: { bars: (o: { size: [number, number] }) => uPlot.Series.PathBuilder };
   }).paths.bars({ size: [0.7, 60] });
@@ -566,16 +633,22 @@ function drawGauge(container: HTMLElement, g: LineGraph, unit: string): null {
 }
 
 // Latest quantile values (summary) as a bar chart (p50/p95/… from q* series).
-function drawPercentile(container: HTMLElement, g: LineGraph): uPlot | null {
+function quantileBars(g: LineGraph): BarGraph | null {
   const q = g.series
     .filter((s) => /^q[\d.]+/.test(s.label))
     .map((s) => ({ label: s.label.split(' · ')[0], value: latest(s.ys) }))
     .filter((s): s is { label: string; value: number } => s.value != null);
-  if (!q.length) {
+  if (!q.length) return null;
+  return { kind: 'bar', categories: q.map((x) => x.label), values: q.map((x) => x.value) };
+}
+
+function drawPercentile(container: HTMLElement, g: LineGraph): uPlot | null {
+  const bars = quantileBars(g);
+  if (!bars) {
     container.innerHTML = '<div class="muted">No quantiles to plot</div>';
     return null;
   }
-  return drawBar(container, { kind: 'bar', categories: q.map((x) => x.label), values: q.map((x) => x.value) });
+  return drawBar(container, bars);
 }
 
 // Per-card fallback table built from the summarized data points.
@@ -602,8 +675,7 @@ function drawBar(container: HTMLElement, g: BarGraph): uPlot {
   const stroke = cssVar('--vscode-foreground', '#ccc');
   const grid = cssVar('--vscode-panel-border', 'rgba(128,128,128,0.2)');
   const width = containerWidth(container);
-  const xs = g.categories.map((_, i) => i);
-  const data: uPlot.AlignedData = [xs, g.values];
+  const data = barData(g);
   const barsBuilder = (uPlot as unknown as {
     paths: { bars: (o: { size: [number, number] }) => uPlot.Series.PathBuilder };
   }).paths.bars({ size: [0.7, 60] });
@@ -664,6 +736,54 @@ function renderKind(
     default:
       return noData();
   }
+}
+
+// The fast-path mirror of renderKind: the same data an existing uPlot for this kind was
+// built from, so it can be swapped in with setData. Null means the kind draws plain DOM
+// (or has nothing to draw) and must go through a full rebuild.
+function kindData(
+  kind: ChartKind,
+  m: MetricVM,
+  wline: LineGraph | undefined
+): uPlot.AlignedData | null {
+  const g = wline && wline.xs.length > 0 ? wline : undefined;
+  switch (kind) {
+    case 'line':
+    case 'rate':
+    case 'area':
+      return g ? lineData(g) : null;
+    case 'stacked-area':
+      return g ? stackedData(g) : null;
+    case 'bar':
+      return g ? timeBarsData(g) : null;
+    case 'histogram':
+      return m.bars ? barData(m.bars) : null;
+    case 'percentile': {
+      const bars = g ? quantileBars(g) : null;
+      return bars ? barData(bars) : null;
+    }
+    default:
+      return null;
+  }
+}
+
+// Everything baked into a uPlot at construction time: the kind, the pipeline that shaped
+// the data, and the series/category set. While this is stable a data push only needs
+// setData, which leaves the card's DOM, focus and scroll position untouched.
+function renderSig(
+  m: MetricVM,
+  kind: ChartKind,
+  agg: AggKind,
+  reduce: ReduceKind,
+  wline: LineGraph | undefined
+): string {
+  const parts: string[] = [kind, agg, reduce];
+  const g = wline && wline.xs.length > 0 ? wline : undefined;
+  parts.push(g ? '1' : '0');
+  if (kind === 'histogram') parts.push((m.bars?.categories ?? []).join('\u0001'));
+  else if (kind === 'percentile') parts.push(((g && quantileBars(g)?.categories) ?? []).join('\u0001'));
+  else parts.push((g?.series ?? []).map((s) => s.label).join('\u0001'));
+  return parts.join('|');
 }
 
 // Collapse a metric's label sets into one aggregate series per timestamp.
@@ -754,42 +874,74 @@ function updateRetentionHint(rows: MetricVM[], [from, to]: XRange): void {
   }
 }
 
+function setBucketHint(body: HTMLElement, bucketSec: number): void {
+  const hint = body.parentElement?.querySelector('.bucket-hint') as HTMLElement | null;
+  if (hint) hint.textContent = bucketSec ? '· ' + fmtBucket(bucketSec) : '';
+}
+
 function renderCardBody(m: MetricVM, body: HTMLElement): void {
-  const existing = chartByMetric.get(m.name);
-  if (existing) {
-    try {
-      existing.destroy();
-    } catch {
-      /* ignore */
-    }
-    chartByMetric.delete(m.name);
-  }
-  body.innerHTML = '';
   try {
     const kind = chartFor(m);
     const agg = aggFor(m);
-    const xRange = windowBounds();
-    const shaped = shapeLine(m, kind, agg, xRange[0], xRange[1]);
-    const wline = applyReduce(shaped.line, reduceFor(m));
+    const reduce = reduceFor(m);
+    const bounds = windowBounds();
+    const shaped = shapeLine(m, kind, agg, bounds[0], bounds[1]);
+    const wline = applyReduce(shaped.line, reduce);
+    const sig = renderSig(m, kind, agg, reduce, wline);
+    const prev = chartByMetric.get(m.name);
+    if (prev && prev.sig === sig) {
+      const data = kindData(kind, m, wline);
+      if (data) {
+        // Mutated in place because the chart's x-scale closure holds this same array.
+        prev.xRange[0] = bounds[0];
+        prev.xRange[1] = bounds[1];
+        prev.chart.setData(data);
+        setBucketHint(body, shaped.bucketSec);
+        return;
+      }
+    }
+    destroyChart(m.name);
+    body.innerHTML = '';
+    const xRange: XRange = [bounds[0], bounds[1]];
     const chart = renderKind(kind, m, wline, body, xRange);
-    if (chart) chartByMetric.set(m.name, chart);
-    const hint = body.parentElement?.querySelector('.bucket-hint') as HTMLElement | null;
-    if (hint) hint.textContent = shaped.bucketSec ? '· ' + fmtBucket(shaped.bucketSec) : '';
+    if (chart) chartByMetric.set(m.name, { chart, sig, xRange });
+    setBucketHint(body, shaped.bucketSec);
   } catch {
+    destroyChart(m.name);
     body.innerHTML = '<div class="muted">Unable to render chart</div>';
   }
 }
 
+// Reconcile cards against the metric list keyed by name, reusing the existing DOM. Wiping
+// and rebuilding the list collapsed the scroll container's height, which reset the scroll
+// position and closed any dropdown the user had open, on every data push.
 function renderGraphs(rows: MetricVM[]): void {
-  destroyCharts();
-  chartsEl.innerHTML = '';
   const withGraphs = rows.filter((m) => m.line || m.bars);
   updateRetentionHint(withGraphs, windowBounds());
+  const existing = new Map<string, HTMLElement>();
+  for (const node of Array.from(chartsEl.children)) {
+    const name = node.getAttribute('data-metric');
+    if (name) existing.set(name, node as HTMLElement);
+  }
+  const wanted = new Set(withGraphs.map((m) => m.name));
+  for (const [name, node] of existing) {
+    if (wanted.has(name)) continue;
+    destroyChart(name);
+    node.remove();
+    existing.delete(name);
+  }
+  let cursor: Element | null = chartsEl.firstElementChild;
   for (const m of withGraphs) {
-    const card = makeCard(m);
-    chartsEl.appendChild(card);
-    const body = card.querySelector('.card-body') as HTMLElement;
-    renderCardBody(m, body);
+    let card = existing.get(m.name);
+    if (!card) {
+      card = makeCard(m);
+      chartsEl.insertBefore(card, cursor);
+    } else {
+      syncCardHead(card, m);
+      if (card !== cursor) chartsEl.insertBefore(card, cursor);
+    }
+    cursor = card.nextElementSibling;
+    renderCardBody(m, card.querySelector('.card-body') as HTMLElement);
   }
   graphWrap.setAttribute('data-empty', withGraphs.length ? 'false' : 'true');
 }
@@ -806,26 +958,32 @@ function apply(): void {
   btnTable.classList.toggle('active', !isGraph);
   btnGraph.classList.toggle('active', isGraph);
   if (isGraph) {
-    scheduleGraphRender(rows);
+    scheduleGraphRender();
   } else {
     window.clearTimeout(graphTimer);
     destroyCharts();
+    chartsEl.innerHTML = '';
     renderTable(rows);
   }
 }
 
 // Coalesce rapid data pushes (store fires ~every 150 ms) into at most one redraw per window.
+// The row set is re-derived in the callback so a queued timer cannot render a stale list.
 let graphTimer: number | undefined;
-function scheduleGraphRender(rows: MetricVM[]): void {
+function scheduleGraphRender(): void {
   window.clearTimeout(graphTimer);
-  graphTimer = window.setTimeout(() => renderGraphs(rows), 250);
+  graphTimer = window.setTimeout(() => renderGraphs(filtered()), 250);
 }
 
 function setView(next: 'table' | 'graph'): void {
   if (view === next) return;
   view = next;
+  persistState();
   apply();
 }
+
+if (typeof savedState.query === 'string') q.value = savedState.query;
+if (savedState.view === 'graph' || savedState.view === 'table') view = savedState.view;
 
 for (const r of RANGE_OPTIONS) {
   const opt = document.createElement('option');
@@ -843,7 +1001,10 @@ for (const s of STEP_OPTIONS) {
   stepSel.appendChild(opt);
 }
 
-q.addEventListener('input', apply);
+q.addEventListener('input', () => {
+  persistState();
+  apply();
+});
 btnTable.addEventListener('click', () => setView('table'));
 btnGraph.addEventListener('click', () => setView('graph'));
 
@@ -881,11 +1042,24 @@ chartsEl.addEventListener('change', (e) => {
   if (m && body) renderCardBody(m, body);
 });
 
+// Resize in place; rebuilding every card here would throw away scroll and focus too.
+function resizeCharts(): void {
+  for (const entry of chartByMetric.values()) {
+    const body = entry.chart.root.parentElement;
+    if (!body) continue;
+    try {
+      entry.chart.setSize({ width: containerWidth(body), height: 180 });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 let resizeTimer: number | undefined;
 window.addEventListener('resize', () => {
   if (view !== 'graph') return;
   window.clearTimeout(resizeTimer);
-  resizeTimer = window.setTimeout(() => apply(), 150);
+  resizeTimer = window.setTimeout(resizeCharts, 150);
 });
 
 window.addEventListener('message', (e: MessageEvent) => {
