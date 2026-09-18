@@ -120,4 +120,33 @@ describe('decode', () => {
       { quantile: 0.99, value: 20 },
     ]);
   });
+
+  it('decodeMetrics threads sum monotonicity and leaves it undefined otherwise', () => {
+    const req = {
+      resourceMetrics: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'm' } }] },
+          scopeMetrics: [
+            {
+              metrics: [
+                {
+                  name: 'requests',
+                  sum: { isMonotonic: true, dataPoints: [{ asInt: '5', attributes: [] }] },
+                },
+                {
+                  name: 'queue.depth',
+                  sum: { isMonotonic: false, dataPoints: [{ asInt: '2', attributes: [] }] },
+                },
+                { name: 'temp', gauge: { dataPoints: [{ asDouble: 21.5, attributes: [] }] } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const [batch] = decodeMetrics(req);
+    assert.strictEqual(batch.metrics.find((x) => x.name === 'requests')!.monotonic, true);
+    assert.strictEqual(batch.metrics.find((x) => x.name === 'queue.depth')!.monotonic, false);
+    assert.strictEqual(batch.metrics.find((x) => x.name === 'temp')!.monotonic, undefined);
+  });
 });

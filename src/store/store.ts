@@ -247,6 +247,7 @@ export class TelemetryStore {
         if (existing) {
           existing.dataPoints = metric.dataPoints;
           existing.type = metric.type;
+          existing.monotonic = metric.monotonic;
           existing.unit = metric.unit;
           existing.description = metric.description;
         } else {

@@ -291,12 +291,13 @@ export function decodeMetrics(req: any): ResourceMetrics[] {
     const metrics: Metric[] = [];
     for (const sm of rm.scopeMetrics || rm.instrumentationLibraryMetrics || []) {
       for (const m of sm.metrics || []) {
-        const { type, points } = metricType(m);
+        const { type, points, monotonic } = metricType(m);
         metrics.push({
           name: typeof m.name === 'string' ? m.name : '',
           description: m.description || undefined,
           unit: m.unit || undefined,
           type,
+          monotonic,
           dataPoints: points.map((dp: any) => metricPoint(type, dp)),
         });
       }

@@ -106,6 +106,8 @@ export interface Metric {
   description?: string;
   unit?: string;
   type: MetricType;
+  // Only meaningful for `sum`: true = counter, false = updowncounter.
+  monotonic?: boolean;
   dataPoints: MetricDataPoint[];
 }
 
