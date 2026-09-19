@@ -18,22 +18,27 @@ restarts.
 
 Traces & spans — find slow or failing requests and examine them in a waterfall timeline:
 
-![Traces panel](images/screenshots/traces.png)
+![Traces panel](images/screenshots/trace.png)
 
-Logs — search and filter, then jump straight to the source line:
+Metrics — gauges, counters, and histograms per service instance. The **Graph** view renders each
+metric as a chart, with per-graph dropdowns for the chart type (scoped to the metric's OTEL type),
+the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
 
-![Logs panel](images/screenshots/logs.png)
+![Metrics graph view](images/screenshots/metrics-graphs.png)
 
-Metrics — inspect gauges, counters, and histograms per service instance, in a table or as
-time-series graphs:
+Logs — search and filter, choose which columns to show (including any attribute promoted to its
+own sortable column), then jump straight to the source line:
 
-![Metrics panel](images/screenshots/metrics.png)
+![Logs panel with the column picker](images/screenshots/logs-columns.png)
 
-The **Graph** view renders each metric as a chart, and a **per-graph dropdown** lets you pick
-the chart type from options scoped to the metric's OTEL type (e.g. counters offer line, rate,
-stacked-area, area, bar; histograms offer bucket bars). The choice is remembered per metric:
+Export the rows you care about as OTLP/JSON, plain JSON, or CSV — picking the columns, the record
+count, and whether to export the filtered, all, or selected rows:
 
-![Metrics graph view](images/screenshots/metrics-graph.png)
+![Log export dialog](images/screenshots/logs-export.png)
+
+Service map — services, databases, queues, and external dependencies inferred from spans:
+
+![Service map](images/screenshots/service-map.png)
 
 ## What this extension does
 
