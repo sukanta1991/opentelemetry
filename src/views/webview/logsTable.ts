@@ -287,6 +287,41 @@ function spacer(height: number, span: number): string {
     : '';
 }
 
+function sanitizeHtml(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  const blockedTags = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']);
+  const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode() as Element | null;
+  while (node) {
+    const el = node;
+    node = walker.nextNode() as Element | null;
+
+    if (blockedTags.has(el.tagName)) {
+      el.remove();
+      continue;
+    }
+
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+        continue;
+      }
+      if (
+        (name === 'href' || name === 'src' || name === 'xlink:href') &&
+        (value.startsWith('javascript:') || value.startsWith('data:text/html'))
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
+
+  return template.innerHTML;
+}
+
 function paint(): void {
   const cols = visibleColumns();
   const span = Math.max(1, cols.length);
@@ -311,7 +346,7 @@ function paint(): void {
     html.push('</tr>');
   }
   html.push(spacer(total - offsets[end], span));
-  tbody.innerHTML = html.join('');
+  tbody.innerHTML = sanitizeHtml(html.join(''));
 
   measureRendered(start, end);
 }
