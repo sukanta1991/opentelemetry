@@ -7,6 +7,8 @@ export interface OtelSettings extends ReceiverConfig {
   maxLogsPerInstance: number;
   maxTracesPerInstance: number;
   maxMetricPointsPerSeries: number;
+  importMaxFileSizeMb: number;
+  importMaxRecords: number;
 }
 
 export function readSettings(): OtelSettings {
@@ -22,5 +24,7 @@ export function readSettings(): OtelSettings {
     maxLogsPerInstance: c.get<number>('retention.maxLogsPerInstance', 5000),
     maxTracesPerInstance: c.get<number>('retention.maxTracesPerInstance', 2000),
     maxMetricPointsPerSeries: c.get<number>('retention.maxMetricPointsPerSeries', 500),
+    importMaxFileSizeMb: Math.max(1, c.get<number>('import.maxFileSize', 200)),
+    importMaxRecords: Math.max(1, c.get<number>('import.maxRecords', 50000)),
   };
 }

@@ -4,6 +4,7 @@ import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
 import { readSettings } from './settings';
 import { InstanceNode, InstancesTreeProvider } from './views/instancesTree';
+import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
 import { ServiceMapPanel } from './views/serviceMapPanel';
@@ -62,6 +63,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const id = await resolveInstanceId(arg);
       if (id) LogsPanel.show(controller, id);
     }),
+    vscode.commands.registerCommand('otel.exportLogs', async (arg) => {
+      const id = await resolveInstanceId(arg);
+      if (id) LogsPanel.exportFrom(controller, id);
+    }),
+    vscode.commands.registerCommand('otel.importLogs', () => importLogs()),
     vscode.commands.registerCommand('otel.openTraces', async (arg) => {
       const id = await resolveInstanceId(arg);
       if (id) TracesPanel.show(controller, id);
@@ -148,6 +154,58 @@ async function showSnippets(): Promise<void> {
     language: pick.snippet.language === 'Python' ? 'python' : 'plaintext',
   });
   await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+}
+
+async function importLogs(): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: 'Import Logs',
+    filters: { 'Log files': ['json'] },
+  });
+  const uri = picked?.[0];
+  if (!uri) return;
+
+  const settings = readSettings();
+  const maxBytes = settings.importMaxFileSizeMb * 1024 * 1024;
+
+  try {
+    // Size is checked before the file is read so an oversized file never reaches memory.
+    const stat = await vscode.workspace.fs.stat(uri);
+    if (stat.size > maxBytes) {
+      const mb = (stat.size / 1024 / 1024).toFixed(1);
+      vscode.window.showErrorMessage(
+        `File is ${mb} MB, above the ${settings.importMaxFileSizeMb} MB import limit. ` +
+          'Raise otel.import.maxFileSize to import it.'
+      );
+      return;
+    }
+
+    const id = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Importing logs…' },
+      async () => {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const parsed = parseLogFile(
+          new TextDecoder('utf-8', { fatal: false }).decode(bytes),
+          settings.importMaxRecords
+        );
+        return controller.store.importLogs({
+          serviceName: parsed.serviceName,
+          resourceAttrs: parsed.resourceAttrs,
+          logs: parsed.logs,
+          sourceLabel: uri.path.split('/').pop() || 'imported.json',
+        });
+      }
+    );
+
+    LogsPanel.show(controller, id);
+    const inst = controller.store.getInstance(id);
+    vscode.window.showInformationMessage(
+      `Imported ${inst?.logCount ?? 0} logs from ${inst?.source ?? 'file'}.`
+    );
+  } catch (e) {
+    const message = e instanceof LogImportError ? e.message : (e as Error).message;
+    vscode.window.showErrorMessage(`Could not import logs. ${message}`);
+  }
 }
 
 export function deactivate(): void {

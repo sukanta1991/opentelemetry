@@ -39,6 +39,15 @@ export interface LogRecord {
   codeLocation?: CodeLocation;
 }
 
+// A log held by the store. `seq` is a per-instance monotonic id that stays valid after
+// ring-buffer eviction, unlike an array index.
+export interface StoredLogRecord extends LogRecord {
+  seq: number;
+}
+
+// 'imported' instances are loaded from a file: read-only, retention-exempt, and not cleared.
+export type InstanceKind = 'live' | 'imported';
+
 export type SpanKind =
   | 'UNSPECIFIED'
   | 'INTERNAL'
