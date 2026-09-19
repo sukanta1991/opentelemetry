@@ -4,6 +4,7 @@
 
 import { createHash } from 'crypto';
 import {
+  InstanceKind,
   KeyValueMap,
   LogRecord,
   Metric,
@@ -13,6 +14,7 @@ import {
   ResourceMetrics,
   ResourceSpans,
   Span,
+  StoredLogRecord,
   Trace,
 } from './model';
 import { RingBuffer } from './ringBuffer';
@@ -30,7 +32,11 @@ export interface Instance {
   serviceName: string;
   serviceInstanceId?: string;
   resourceAttrs: KeyValueMap;
-  logs: RingBuffer<LogRecord>;
+  kind: InstanceKind;
+  // Display label for imported instances (the source filename).
+  source?: string;
+  logs: RingBuffer<StoredLogRecord>;
+  nextLogSeq: number;
   traces: Map<string, Trace>;
   metrics: Map<string, Metric>;
   metricSeries: Map<string, MetricSeries>;
@@ -39,6 +45,20 @@ export interface Instance {
   peer?: string;
   logCount: number;
   spanCount: number;
+}
+
+// A window of logs newer than a caller-held cursor, plus the current eviction watermark.
+export interface LogDelta {
+  records: readonly StoredLogRecord[];
+  oldestSeq: number;
+  total: number;
+}
+
+export interface ImportLogsOptions {
+  serviceName: string;
+  resourceAttrs: KeyValueMap;
+  logs: LogRecord[];
+  sourceLabel: string;
 }
 
 export interface Application {
@@ -56,6 +76,7 @@ export class TelemetryStore {
   private maxTraces: number;
   private maxMetricPoints: number;
   private maxMetricSeries: number;
+  private importCounter = 0;
 
   constructor(maxLogs = 5000, maxTraces = 2000, maxMetricPoints = 500, maxMetricSeries = 200) {
     this.maxLogs = maxLogs;
@@ -88,6 +109,7 @@ export class TelemetryStore {
     this.maxTraces = Math.max(1, maxTraces);
     if (maxMetricPoints !== undefined) this.maxMetricPoints = Math.max(1, maxMetricPoints);
     for (const inst of this.instances.values()) {
+      if (inst.kind === 'imported') continue;
       inst.logs.setCapacity(this.maxLogs);
       this.capTraces(inst);
       for (const series of inst.metricSeries.values()) {
@@ -99,6 +121,7 @@ export class TelemetryStore {
   getApplications(): Application[] {
     const byApp = new Map<string, Instance[]>();
     for (const inst of this.instances.values()) {
+      if (inst.kind === 'imported') continue;
       const list = byApp.get(inst.serviceName) ?? [];
       list.push(inst);
       byApp.set(inst.serviceName, list);
@@ -111,12 +134,49 @@ export class TelemetryStore {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  getImportedInstances(): Instance[] {
+    return [...this.instances.values()]
+      .filter((i) => i.kind === 'imported')
+      .sort((a, b) => b.firstSeen - a.firstSeen);
+  }
+
   getInstance(id: string): Instance | undefined {
     return this.instances.get(id);
   }
 
   getAllInstances(): Instance[] {
     return [...this.instances.values()];
+  }
+
+  getLogs(instanceId: string): readonly StoredLogRecord[] {
+    return this.instances.get(instanceId)?.logs.view() ?? [];
+  }
+
+  // Logs with seq > sinceSeq. `oldestSeq` lets callers drop rows evicted since their last read.
+  getLogsSince(instanceId: string, sinceSeq: number): LogDelta {
+    const inst = this.instances.get(instanceId);
+    if (!inst) return { records: [], oldestSeq: 0, total: 0 };
+    const all = inst.logs.view();
+    const oldestSeq = all.length ? all[0].seq : inst.nextLogSeq;
+    let start = all.length;
+    while (start > 0 && all[start - 1].seq > sinceSeq) start--;
+    return { records: all.slice(start), oldestSeq, total: all.length };
+  }
+
+  findLog(instanceId: string, seq: number): StoredLogRecord | undefined {
+    const all = this.instances.get(instanceId)?.logs.view();
+    if (!all || !all.length) return undefined;
+    // seq is ascending across the buffer, so binary search is safe.
+    let lo = 0;
+    let hi = all.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const found = all[mid];
+      if (found.seq === seq) return found;
+      if (found.seq < seq) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    return undefined;
   }
 
   removeInstance(id: string): void {
@@ -126,8 +186,13 @@ export class TelemetryStore {
   }
 
   clear(): void {
-    this.instances.clear();
-    this.scheduleFire();
+    let changed = false;
+    for (const [id, inst] of this.instances) {
+      if (inst.kind === 'imported') continue;
+      this.instances.delete(id);
+      changed = true;
+    }
+    if (changed) this.scheduleFire();
   }
 
   private instanceId(resource: ResourceInfo, peer?: string): string {
@@ -155,7 +220,9 @@ export class TelemetryStore {
         serviceName: resource.serviceName,
         serviceInstanceId: resource.serviceInstanceId,
         resourceAttrs: resource.attrs,
-        logs: new RingBuffer<LogRecord>(this.maxLogs),
+        kind: 'live',
+        logs: new RingBuffer<StoredLogRecord>(this.maxLogs),
+        nextLogSeq: 1,
         traces: new Map(),
         metrics: new Map(),
         metricSeries: new Map(),
@@ -178,13 +245,57 @@ export class TelemetryStore {
     let changed = false;
     for (const b of batches) {
       const inst = this.upsertInstance(b.resource, peer);
+      if (inst.kind === 'imported') continue;
       for (const log of b.logs) {
-        inst.logs.push(log);
+        inst.logs.push(this.withSeq(inst, log));
         inst.logCount++;
         changed = true;
       }
     }
     if (changed) this.scheduleFire();
+  }
+
+  // Records come straight from decode/import and are owned by the store, so stamping in place
+  // avoids a copy per log on the ingest hot path.
+  private withSeq(inst: Instance, log: LogRecord): StoredLogRecord {
+    const stored = log as StoredLogRecord;
+    stored.seq = inst.nextLogSeq++;
+    return stored;
+  }
+
+  // Creates a read-only instance backed by a file. Retention-exempt and not removed by clear().
+  importLogs(opts: ImportLogsOptions): string {
+    const hash = createHash('sha1')
+      .update(opts.sourceLabel)
+      .update(String(Date.now()))
+      .update(String(this.importCounter++))
+      .digest('hex')
+      .slice(0, 8);
+    const id = `imported::${opts.sourceLabel}::${hash}`;
+    const now = Date.now();
+    const inst: Instance = {
+      id,
+      serviceName: opts.serviceName,
+      resourceAttrs: opts.resourceAttrs,
+      kind: 'imported',
+      source: opts.sourceLabel,
+      logs: new RingBuffer<StoredLogRecord>(0),
+      nextLogSeq: 1,
+      traces: new Map(),
+      metrics: new Map(),
+      metricSeries: new Map(),
+      firstSeen: now,
+      lastSeen: now,
+      logCount: 0,
+      spanCount: 0,
+    };
+    for (const log of opts.logs) {
+      inst.logs.push(this.withSeq(inst, log));
+      inst.logCount++;
+    }
+    this.instances.set(id, inst);
+    this.scheduleFire();
+    return id;
   }
 
   ingestSpans(batches: ResourceSpans[], peer?: string): void {

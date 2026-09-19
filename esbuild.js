@@ -1,5 +1,6 @@
-// Build script for the extension host bundle.
+// Build script for the extension bundles.
 // - Bundles src/extension.ts -> dist/extension.js (CommonJS, `vscode` external)
+// - Bundles each src/views/webview entry point -> dist/webview/*.js (IIFE, browser)
 // - grpc-js / proto-loader are kept external so their runtime file loading works
 // - Copies proto/ and webview assets into dist/ so they can be resolved at runtime
 const esbuild = require('esbuild');
@@ -45,14 +46,14 @@ async function main() {
     plugins: [copyAssetsPlugin],
   });
 
-  // Separate browser bundle for the Metrics panel webview (uPlot + chart app).
+  // Separate browser bundles for the panel webviews (metrics charts, logs table).
   const webviewCtx = await esbuild.context({
-    entryPoints: ['src/views/webview/metricsChart.ts'],
+    entryPoints: ['src/views/webview/metricsChart.ts', 'src/views/webview/logsTable.ts'],
     bundle: true,
     format: 'iife',
     platform: 'browser',
     target: 'es2020',
-    outfile: 'dist/webview/metricsChart.js',
+    outdir: 'dist/webview',
     sourcemap: !production,
     minify: production,
     logLevel: 'info',

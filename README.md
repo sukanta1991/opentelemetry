@@ -39,9 +39,27 @@ stacked-area, area, bar; histograms offer bucket bars). The choice is remembered
 
 - **Embedded OTLP receiver** — accepts **OTLP/gRPC** (default `4317`) and **OTLP/HTTP**
   (protobuf + JSON, default `4318`).
-- **Logs** — search and filter by text, level, and attributes; resizable columns;
-  displayed in capture-time order (`timeMs` / `observedTimeMs`), **Navigate To Code** to jump to
-  the source line, and **Open In Editor** to view a log as JSON.
+- **Logs** — a virtualized table that stays responsive at full retention:
+  - **Search and filter** by text, minimum level, and `attr=value`.
+  - **Time range picker** (1 min … 2 hour, or **All logs**) anchored to the newest log
+    received, so rows stay visible after the emitting app stops. A hint appears when retention
+    holds less history than the selected window.
+  - **Columns** button to choose which of Time, Observed Time, Level, Severity #, Message,
+    Attributes, Scope, Trace ID, Span ID, Code Location and Function are shown — plus any
+    **individual log attribute** promoted to its own sortable column. Drag to reorder,
+    search the list, or reset to defaults.
+  - **Resizable columns** — drag any edge, or double-click it to fit the content.
+  - **Row height** modes: Raw (full wrap), 1 line, 2 lines, and Condensed.
+  - **Sorting** by Time, Observed Time, Severity, or an attribute column. Newest first by default.
+  - **Pause** freezes the view while logs keep arriving in the background, showing how many
+    are queued.
+  - **Multi-select** with Cmd/Ctrl+click, Shift+click ranges, and Cmd/Ctrl+A, with an optional
+    selection checkbox column.
+  - **Export** to OTLP/JSON, plain JSON, or CSV — choosing the visible columns or all
+    attributes, a record count, and whether to export the filtered, all, or selected rows.
+  - **Import** OTLP/JSON or previously exported plain JSON as a read-only instance under the
+    **Imported** node, kept separate from live telemetry.
+  - **Navigate To Code** to jump to the source line, and **Open In Editor** to view a log as JSON.
 - **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
   span waterfall. Distributed spans are merged by trace ID.
 - **Metrics** — per-instance gauges, counters/sums, and histograms with a **Table | Graph**
@@ -118,6 +136,14 @@ OTLP exporter target.
 3. Click **Examine** to open the span waterfall and find the slow or failing span.
 4. Open **Logs**, filter by text or level, and use **Navigate To Code** to jump to the source.
 
+**Share a log sample with a teammate**
+
+1. Open **Logs** and narrow the table with the search, level, attribute, and time-range controls.
+2. Optionally select specific rows (Cmd/Ctrl+click, or Shift+click for a range).
+3. Click **Export…**, pick a format and scope, and save the file.
+4. Your teammate runs **OpenTelemetry: Import Logs From File** to open it under **Imported** —
+   read-only, retention-exempt, and unaffected by **Clear Collected Data**.
+
 **Understand what a service talks to**
 
 1. Generate distributed traffic (HTTP calls, database queries, queue messages).
@@ -134,6 +160,8 @@ OTLP exporter target.
 | `OpenTelemetry: Open Terminal With OTLP Environment` | New terminal pre-set with the OTLP env vars. |
 | `OpenTelemetry: Show Instrumentation Snippet` | Per-language exporter snippets (Node/Python/Go/.NET/Java). |
 | `OpenTelemetry: Open Logs / Traces / Metrics` | Open a panel for the selected instance. |
+| `OpenTelemetry: Export Logs` | Export logs as OTLP/JSON, plain JSON, or CSV. |
+| `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON or exported plain JSON file as a read-only instance. |
 | `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove
@@ -152,6 +180,8 @@ Instance** action.
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
+| `otel.import.maxFileSize` | `200` | Largest log file (MB) accepted by **Import Logs**. Checked before the file is read. |
+| `otel.import.maxRecords` | `50000` | Most records accepted from one import. Imported logs bypass retention, so this bounds their memory use. |
 
 Example `settings.json`:
 
@@ -197,8 +227,10 @@ action is unavailable. It also can't navigate to third-party or decompiled code.
 
 ### My collected data disappeared
 
-Telemetry is stored **in memory** and is cleared when the receiver restarts. Configurable
-export/persistence is planned.
+Live telemetry is stored **in memory** and is cleared when the receiver restarts or when you run
+**Clear Collected Data**. To keep a copy, use **Export…** in the Logs panel and re-open it later
+with **Import Logs From File** — imported instances survive **Clear Collected Data** and are only
+removed explicitly.
 
 ### The settings gear opens an empty page
 
@@ -210,10 +242,9 @@ This was fixed in `0.1.2`. Update to the latest version, or open settings manual
 Planned and under exploration — feedback welcome via
 [issues](https://github.com/sukanta1991/opentelemetry/issues):
 
-- Configurable export and persistence (beyond the in-memory store)
-- Richer search and filtering for logs and traces, plus live tailing
+- Trace and metric export (logs can already be exported and imported)
+- Richer search and filtering for traces
 - Deeper service-map analytics (latency, error rates, throughput)
-
 ## Contributing
 
 Issues and pull requests are welcome at

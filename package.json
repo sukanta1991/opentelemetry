@@ -143,6 +143,18 @@
         "icon": "$(output)"
       },
       {
+        "command": "otel.exportLogs",
+        "title": "Export Logs",
+        "category": "OpenTelemetry",
+        "icon": "$(desktop-download)"
+      },
+      {
+        "command": "otel.importLogs",
+        "title": "Import Logs From File",
+        "category": "OpenTelemetry",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "otel.openTraces",
         "title": "Open Traces",
         "category": "OpenTelemetry",
@@ -184,12 +196,16 @@
           "group": "navigation@3"
         },
         {
-          "command": "otel.openSettings",
+          "command": "otel.importLogs",
           "when": "view == otel.instances",
           "group": "navigation@4"
+        },
+        {
+          "command": "otel.openSettings",
+          "when": "view == otel.instances",
+          "group": "navigation@5"
         }
-      ],
-      "view/item/context": [
+      ],      "view/item/context": [
         {
           "command": "otel.openLogs",
           "when": "view == otel.instances && viewItem == otelInstance",
@@ -219,6 +235,21 @@
           "command": "otel.openMetrics",
           "when": "view == otel.instances && viewItem == otelInstance",
           "group": "1_open@3"
+        },
+        {
+          "command": "otel.openLogs",
+          "when": "view == otel.instances && viewItem == otelImportedInstance",
+          "group": "inline@1"
+        },
+        {
+          "command": "otel.exportLogs",
+          "when": "view == otel.instances && viewItem == otelImportedInstance",
+          "group": "1_open@2"
+        },
+        {
+          "command": "otel.removeInstance",
+          "when": "view == otel.instances && viewItem == otelImportedInstance",
+          "group": "9_danger@1"
         },
         {
           "command": "otel.removeInstance",
@@ -278,6 +309,18 @@
           "type": "number",
           "default": 500,
           "description": "Maximum number of time-series data points retained in memory per metric series (oldest dropped first). Controls how far back metric graphs can plot."
+        },
+        "otel.import.maxFileSize": {
+          "type": "number",
+          "default": 200,
+          "minimum": 1,
+          "description": "Maximum size, in megabytes, of a log file that can be imported. Larger files are rejected before being read into memory."
+        },
+        "otel.import.maxRecords": {
+          "type": "number",
+          "default": 50000,
+          "minimum": 1,
+          "description": "Maximum number of log records accepted from a single import. Imported logs are exempt from retention limits, so this bounds how much memory one file can consume."
         }
       }
     }

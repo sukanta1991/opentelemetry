@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Logs panel: a **Columns** button opens a picker to show or hide any of Time, Observed Time,
+  Level, Severity #, Message, Attributes, Scope, Trace ID, Span ID, Code Location and Function.
+  Individual log **attributes** can be promoted to their own sortable columns. The "Shown" list
+  is drag-to-reorder, the catalogue is searchable, and **Reset** restores the defaults.
+- Logs panel: **every** column is now resizable, including Time and Level. Double-click a
+  resize handle to fit the column to its content. Widths, order and visibility persist per
+  instance panel.
+- Logs panel: a **row height** control with Raw (full wrap), 1 line, 2 lines, and Condensed
+  (max 4 lines) modes.
+- Logs panel: a **time-range picker** (1 min, 2 min, 5 min, 15 min, 30 min, 1 hour, 2 hours,
+  or All logs) anchored to the newest log received, so rows stay visible after the emitting app
+  stops. A hint appears when retention holds less history than the selected window, with a
+  shortcut to raise `otel.retention.maxLogsPerInstance`.
+- Logs panel: **click-to-sort** headers for Time, Observed Time, Severity and attribute columns.
+- Logs panel: a **Pause** toggle that freezes the view while logs keep arriving in the
+  background, showing how many are queued.
+- Logs panel: **multi-select** via Cmd/Ctrl+click, Shift+click ranges and Cmd/Ctrl+A, plus an
+  optional selection checkbox column with a select-all header.
+- Logs panel: **Export…** writes logs as OTLP/JSON, plain JSON, or CSV, choosing between the
+  visible columns or all attributes, a record count, and the filtered, all, or selected rows.
+  Also available as `OpenTelemetry: Export Logs`.
+- New command `OpenTelemetry: Import Logs From File` (and an upload icon in the Instances view)
+  loads OTLP/JSON or previously exported plain JSON into a read-only instance under a new
+  **Imported** node. Imported instances are exempt from retention, survive
+  **Clear Collected Data**, and are removed only explicitly.
+- New settings `otel.import.maxFileSize` (default `200` MB) and `otel.import.maxRecords`
+  (default `50000`) bound what a single import may load.
+
+### Changed
+
+- **Breaking (display):** the Logs table now sorts **newest first**, with new logs appearing at
+  the top. It previously showed oldest first and appended at the bottom. Click the **Time**
+  header to switch back to ascending order.
+- Logs panel: the table is now **virtualized** and only renders the visible rows, removing the
+  previous 2000-row display cap. The extension host also sends only newly arrived records
+  instead of re-sending the whole buffer on every update, so streaming no longer re-renders the
+  table several times a second.
+- Logs panel: the **Attributes** column now shows every attribute rather than the first eight.
+
+### Fixed
+
+- Logs panel: the table header no longer scrolls away with the rows.
+- Logs panel: selecting a log after older entries were dropped from the retention buffer could
+  target the wrong record; **Navigate To Code** and **Open In Editor** now resolve the intended
+  log. Selection and scroll position are also preserved as new logs arrive.
+
 ## [0.2.2] - 2026-09-19
 
 ### Fixed
