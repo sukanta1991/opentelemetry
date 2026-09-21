@@ -3,13 +3,17 @@
 
 import { AttributeValue, KeyValueMap, LogRecord } from '../store/model';
 
-export type ImportFormat = 'otlp' | 'plain' | 'unknown';
+export type ImportFormat = 'otlp' | 'plain' | 'jsonl' | 'unknown';
 
 export interface ImportedLogs {
   serviceName: string;
   serviceInstanceId?: string;
   resourceAttrs: KeyValueMap;
   logs: LogRecord[];
+  /** Lines rejected during a JSON Lines import; other formats abort instead of skipping. */
+  skipped?: number;
+  /** Reason the first rejected line failed, for the user-facing summary. */
+  skippedSample?: string;
 }
 
 export class LogImportError extends Error {
@@ -24,6 +28,12 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 const MAX_ATTRS_PER_RECORD = 256;
 const MAX_SEVERITY_NUMBER = 24;
+
+// Bound the work a single crafted JSONL line can force during flattening.
+const MAX_FLATTEN_DEPTH = 8;
+const MAX_FLATTEN_KEYS = 512;
+// Cap the detection scan so a large non-JSONL file is rejected quickly.
+const JSONL_DETECT_LINES = 20;
 
 // --- Validation primitives ---------------------------------------------------------------
 
@@ -310,16 +320,331 @@ function readCodeLocation(v: unknown, path: string): LogRecord['codeLocation'] {
   };
 }
 
+// --- JSON Lines ------------------------------------------------------------------------------
+//
+// One JSON object per line, from an arbitrary vendor. There is no schema to rely on, so each
+// object is flattened to dotted paths and the well-known fields are located by leaf name. Keys
+// are matched exactly against the candidate lists below, never by substring, so a near-miss like
+// "timestampMicros" cannot be mistaken for "timestamp".
+
+interface FlatField {
+  path: string;
+  leaf: string;
+  value: AttributeValue;
+}
+
+// Lower-cases and folds _ and - to . so trace_id, traceId and trace-id all reach a candidate.
+function normaliseLeaf(key: string): string {
+  return key
+    .toLowerCase()
+    .replace(/[_-]+/g, '.')
+    .replace(/^[@$.]+/, '');
+}
+
+const TIME_KEYS = [
+  'timestamp', 'time', 'timeunixnano', 'time.unix.nano', 'timems', 'time.ms',
+  'timestampnanos', 'timestamp.nanos', 'timestampmicros', 'timestamp.micros',
+  'eventtime', 'event.time', 'datetime', 'date', 'ts',
+];
+const OBSERVED_TIME_KEYS = [
+  'observedtimeunixnano', 'observed.time.unix.nano', 'observedtime', 'observed.time',
+  'ingresstimestamp', 'ingress.timestamp', 'ingestedat', 'ingested.at', 'receivedat', 'received.at',
+];
+const BODY_KEYS = ['message', 'body', 'msg', 'text', 'log', 'event', 'description'];
+const SEVERITY_KEYS = ['severity', 'severitytext', 'severity.text', 'level', 'loglevel', 'log.level'];
+const SEVERITY_NUMBER_KEYS = ['severitynumber', 'severity.number'];
+const TRACE_KEYS = ['traceid', 'trace.id'];
+const SPAN_KEYS = ['spanid', 'span.id'];
+const SCOPE_KEYS = ['scope', 'logger', 'loggername', 'logger.name', 'category', 'classname', 'class.name'];
+const SERVICE_KEYS = [
+  'service.name', 'servicename', 'application.name', 'applicationname',
+  'faas.name', 'faasname', 'subsystemname', 'service', 'application', 'app',
+];
+const SERVICE_INSTANCE_KEYS = [
+  'service.instance.id', 'serviceinstanceid', 'faas.instance.cx.id',
+  'instance.id', 'instanceid', 'host.name', 'hostname', 'computername',
+];
+
+const SEVERITY_BY_TEXT: Record<string, number> = {
+  trace: 1, trce: 1, verbose: 1, finest: 1,
+  debug: 5, dbug: 5, fine: 5,
+  info: 9, information: 9, informational: 9, notice: 9,
+  warn: 13, warning: 13,
+  error: 17, err: 17, fail: 17, failure: 17, severe: 17,
+  fatal: 21, critical: 21, crit: 21, alert: 21, emerg: 21, emergency: 21, panic: 21,
+};
+
+// Microsoft.Extensions.Logging console layout, e.g. "fail: Some.Category[0]\n  ...".
+const PREFIX_SEVERITY: Record<string, [number, string]> = {
+  trce: [1, 'TRACE'],
+  dbug: [5, 'DEBUG'],
+  info: [9, 'INFO'],
+  warn: [13, 'WARN'],
+  fail: [17, 'ERROR'],
+  crit: [21, 'FATAL'],
+};
+
+function flattenInto(o: Record<string, unknown>, prefix: string, depth: number, out: FlatField[]): void {
+  if (depth > MAX_FLATTEN_DEPTH) {
+    throw new LogImportError(`${prefix || 'record'}: nesting is deeper than ${MAX_FLATTEN_DEPTH} levels`);
+  }
+  for (const key of Object.keys(o)) {
+    if (FORBIDDEN_KEYS.has(key)) {
+      throw new LogImportError(`${prefix ? `${prefix}.` : ''}${key}: key "${key}" is not allowed`);
+    }
+    const path = prefix ? `${prefix}.${key}` : key;
+    const value = o[key];
+    if (isPlainObject(value)) {
+      flattenInto(value, path, depth + 1, out);
+      continue;
+    }
+    // Empty strings and nulls are placeholders in most exports, not data worth a column.
+    if (value === null || value === undefined || value === '') continue;
+    if (out.length >= MAX_FLATTEN_KEYS) {
+      throw new LogImportError(`record has more than ${MAX_FLATTEN_KEYS} fields`);
+    }
+    out.push({ path, leaf: normaliseLeaf(key), value: readAttributeValue(value, path) });
+  }
+}
+
+// Magnitude decides the unit: an epoch in seconds and one in nanoseconds are 9 digits apart.
+function scaleToMs(n: number): number {
+  const abs = Math.abs(n);
+  if (abs >= 1e17) return Math.round(n / 1e6);
+  if (abs >= 1e14) return Math.round(n / 1e3);
+  if (abs >= 1e11) return Math.round(n);
+  return Math.round(n * 1000);
+}
+
+function autoEpochMs(v: AttributeValue, path: string): number | undefined {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) fail(path, 'a finite timestamp');
+    return scaleToMs(v);
+  }
+  if (typeof v === 'string') {
+    // Nanosecond epochs exceed Number.MAX_SAFE_INTEGER, so integer strings are scaled as BigInt.
+    if (/^-?\d+$/.test(v)) {
+      const n = BigInt(v);
+      const abs = n < 0n ? -n : n;
+      if (abs >= 100_000_000_000_000_000n) return Number(n / 1_000_000n);
+      if (abs >= 100_000_000_000_000n) return Number(n / 1_000n);
+      if (abs >= 100_000_000_000n) return Number(n);
+      return Number(n) * 1000;
+    }
+    const parsed = Date.parse(v);
+    if (Number.isNaN(parsed)) fail(path, 'a timestamp');
+    return parsed;
+  }
+  return undefined;
+}
+
+function severityFromPrefix(body: AttributeValue): [number, string] | undefined {
+  if (typeof body !== 'string') return undefined;
+  const m = /^(trce|dbug|info|warn|fail|crit)\s*:/i.exec(body);
+  return m ? PREFIX_SEVERITY[m[1].toLowerCase()] : undefined;
+}
+
+function pick(byLeaf: Map<string, FlatField>, candidates: readonly string[]): FlatField | undefined {
+  for (const c of candidates) {
+    const f = byLeaf.get(c);
+    if (f) return f;
+  }
+  return undefined;
+}
+
+interface MappedLine {
+  log: LogRecord;
+  serviceName?: string;
+  serviceInstanceId?: string;
+}
+
+export function mapJsonlRecord(value: Record<string, unknown>, path: string): MappedLine {
+  const fields: FlatField[] = [];
+  flattenInto(value, '', 0, fields);
+  if (!fields.length) throw new LogImportError(`${path}: object has no usable fields`);
+
+  const byLeaf = new Map<string, FlatField>();
+  for (const f of fields) if (!byLeaf.has(f.leaf)) byLeaf.set(f.leaf, f);
+
+  const consumed = new Set<string>();
+  const take = (candidates: readonly string[]): FlatField | undefined => {
+    const f = pick(byLeaf, candidates);
+    if (f) consumed.add(f.path);
+    return f;
+  };
+
+  const timeField = take(TIME_KEYS);
+  const observedField = take(OBSERVED_TIME_KEYS);
+  const bodyField = take(BODY_KEYS);
+  const severityField = take(SEVERITY_KEYS);
+  const severityNumberField = take(SEVERITY_NUMBER_KEYS);
+  const traceField = take(TRACE_KEYS);
+  const spanField = take(SPAN_KEYS);
+  const scopeField = take(SCOPE_KEYS);
+  const serviceField = take(SERVICE_KEYS);
+  const instanceField = take(SERVICE_INSTANCE_KEYS);
+
+  const body = bodyField ? bodyField.value : null;
+  const timeMs = timeField ? autoEpochMs(timeField.value, `${path}.${timeField.path}`) : undefined;
+  const observedTimeMs = observedField
+    ? autoEpochMs(observedField.value, `${path}.${observedField.path}`)
+    : undefined;
+
+  let severityText = '';
+  let severityNumber = 0;
+  if (severityNumberField) {
+    severityNumber = clampSeverity(severityNumberField.value, `${path}.${severityNumberField.path}`);
+  }
+  if (severityField) {
+    if (typeof severityField.value === 'string') {
+      severityText = severityField.value;
+      if (!severityNumber) severityNumber = SEVERITY_BY_TEXT[severityText.trim().toLowerCase()] ?? 0;
+    } else if (typeof severityField.value === 'number' && !severityNumber) {
+      severityNumber = clampSeverity(severityField.value, `${path}.${severityField.path}`);
+    }
+  }
+  if (!severityNumber) {
+    const fromPrefix = severityFromPrefix(body);
+    if (fromPrefix) {
+      severityNumber = fromPrefix[0];
+      if (!severityText) severityText = fromPrefix[1];
+    }
+  }
+
+  const str = (f: FlatField | undefined): string | undefined =>
+    f && typeof f.value === 'string' ? f.value : undefined;
+
+  const attrs: KeyValueMap = {};
+  let count = 0;
+  for (const f of fields) {
+    if (consumed.has(f.path)) continue;
+    if (++count > MAX_ATTRS_PER_RECORD) {
+      throw new LogImportError(
+        `${path}: more than ${MAX_ATTRS_PER_RECORD} leftover fields exceeds the per-record attribute limit`
+      );
+    }
+    attrs[f.path] = f.value;
+  }
+
+  return {
+    log: {
+      timeMs: timeMs ?? observedTimeMs ?? 0,
+      observedTimeMs,
+      severityNumber,
+      severityText,
+      body,
+      attrs,
+      traceId: str(traceField),
+      spanId: str(spanField),
+      scope: str(scopeField),
+    },
+    serviceName: str(serviceField),
+    serviceInstanceId: str(instanceField),
+  };
+}
+
+// Tolerant on purpose: a single malformed leading line should not disqualify the whole file.
+export function detectJsonl(text: string): boolean {
+  let checked = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/^\uFEFF/, '').trim();
+    if (!line) continue;
+    if (line.startsWith('{')) {
+      try {
+        const value = JSON.parse(line);
+        if (isPlainObject(value) && looksLikeLogObject(value)) return true;
+      } catch {
+        // Keep scanning; a later line may still be well-formed.
+      }
+    }
+    if (++checked >= JSONL_DETECT_LINES) return false;
+  }
+  return false;
+}
+
+// An arbitrary JSON object is only a log line if something time-, body- or severity-shaped is in it.
+function looksLikeLogObject(value: Record<string, unknown>): boolean {
+  const fields: FlatField[] = [];
+  try {
+    flattenInto(value, '', 0, fields);
+  } catch {
+    return false;
+  }
+  const leaves = new Set(fields.map((f) => f.leaf));
+  return [...TIME_KEYS, ...BODY_KEYS, ...SEVERITY_KEYS].some((k) => leaves.has(k));
+}
+
+export function parseJsonLines(text: string, maxRecords: number): ImportedLogs {
+  const lines = text.split(/\r?\n/);
+  const logs: LogRecord[] = [];
+  let skipped = 0;
+  let skippedSample: string | undefined;
+  let serviceName = '';
+  let serviceInstanceId: string | undefined;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = i === 0 ? lines[i].replace(/^\uFEFF/, '') : lines[i];
+    if (!raw.trim()) continue;
+
+    let mapped: MappedLine;
+    try {
+      const value = JSON.parse(raw);
+      if (!isPlainObject(value)) fail(`line ${i + 1}`, 'a JSON object');
+      mapped = mapJsonlRecord(value, `line ${i + 1}`);
+    } catch (e) {
+      skipped++;
+      if (!skippedSample) skippedSample = `line ${i + 1}: ${(e as Error).message}`;
+      continue;
+    }
+
+    if (!serviceName && mapped.serviceName) serviceName = mapped.serviceName;
+    if (!serviceInstanceId && mapped.serviceInstanceId) serviceInstanceId = mapped.serviceInstanceId;
+    logs.push(mapped.log);
+    // Bail as soon as the cap is passed rather than materialising the whole file first.
+    if (logs.length > maxRecords) {
+      throw new LogImportError(
+        `File contains more than ${maxRecords} records, above the import limit. ` +
+          'Raise otel.import.maxRecords to import it.'
+      );
+    }
+  }
+
+  if (!logs.length) {
+    throw new LogImportError(
+      skippedSample
+        ? `No line could be read as a log record. First failure — ${skippedSample}`
+        : 'File contains no log records.'
+    );
+  }
+
+  const resolvedName = serviceName || 'imported';
+  const resourceAttrs: KeyValueMap = { 'service.name': resolvedName };
+  if (serviceInstanceId) resourceAttrs['service.instance.id'] = serviceInstanceId;
+
+  return { serviceName: resolvedName, serviceInstanceId, resourceAttrs, logs, skipped, skippedSample };
+}
+
 // --- Entry point -------------------------------------------------------------------------------
 
 export function parseLogFile(text: string, maxRecords: number): ImportedLogs {
-  const doc = parseJsonDocument(text);
-  const format = detectFormat(doc);
+  let doc: unknown;
+  let jsonError: string | undefined;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    jsonError = (e as Error).message;
+  }
+
+  const format = jsonError === undefined ? detectFormat(doc) : 'unknown';
   if (format === 'unknown') {
+    if (detectJsonl(text)) return parseJsonLines(text, maxRecords);
     throw new LogImportError(
-      'Unrecognised file. Import accepts OTLP/JSON or logs exported from this extension as Plain JSON.'
+      'Unrecognised file. Import accepts OTLP/JSON, JSON Lines (.jsonl/.ndjson), ' +
+        'or logs exported from this extension as Plain JSON.' +
+        (jsonError ? ` Not valid JSON: ${jsonError}` : '')
     );
   }
+
   const parsed = format === 'otlp' ? parseOtlpJson(doc) : parsePlainJson(doc);
   if (parsed.logs.length > maxRecords) {
     throw new LogImportError(

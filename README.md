@@ -10,7 +10,7 @@ extra containers. Point any OTLP-compatible SDK at the receiver and your telemet
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.3.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.3.1-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -62,8 +62,7 @@ Service map — services, databases, queues, and external dependencies inferred 
     selection checkbox column.
   - **Export** to OTLP/JSON, plain JSON, or CSV — choosing the visible columns or all
     attributes, a record count, and whether to export the filtered, all, or selected rows.
-  - **Import** OTLP/JSON or previously exported plain JSON as a read-only instance under the
-    **Imported** node, kept separate from live telemetry.
+  - **Import** OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or previously exported plain JSON as a read-only instance under the **Imported** node, kept separate from live telemetry.
   - **Navigate To Code** to jump to the source line, and **Open In Editor** to view a log as JSON.
 - **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
   span waterfall. Distributed spans are merged by trace ID.
@@ -105,8 +104,7 @@ Works with any OTLP-compatible SDK — **Java, .NET, Go, Node.js, Python, Rust**
    code --install-extension SukantaSaha.opentelemetry
    ```
 
-2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or start it
-   from the status bar item). The status bar then shows the active gRPC and HTTP ports.
+2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or start it from the status bar item). The status bar then shows the active gRPC and HTTP ports.
 
 3. Point your application's OTLP exporter at the receiver. Its instance, logs, traces, and metrics
    appear as data arrives.
@@ -149,6 +147,15 @@ OTLP exporter target.
 4. Your teammate runs **OpenTelemetry: Import Logs From File** to open it under **Imported** —
    read-only, retention-exempt, and unaffected by **Clear Collected Data**.
 
+**Bring in logs from another vendor**
+
+1. Export logs from your log platform as JSON Lines (one JSON object per line, `.jsonl`/`.ndjson`).
+2. Run **OpenTelemetry: Import Logs From File** and pick the file.
+3. Nested objects are flattened to dotted attribute keys, and the timestamp, severity, message,
+   trace/span ids, scope, and service name are recognised from common field names — epochs in
+   seconds, milliseconds, microseconds, or nanoseconds are all detected automatically.
+   Unreadable lines are skipped and counted rather than failing the whole import.
+
 **Understand what a service talks to**
 
 1. Generate distributed traffic (HTTP calls, database queries, queue messages).
@@ -166,7 +173,7 @@ OTLP exporter target.
 | `OpenTelemetry: Show Instrumentation Snippet` | Per-language exporter snippets (Node/Python/Go/.NET/Java). |
 | `OpenTelemetry: Open Logs / Traces / Metrics` | Open a panel for the selected instance. |
 | `OpenTelemetry: Export Logs` | Export logs as OTLP/JSON, plain JSON, or CSV. |
-| `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON or exported plain JSON file as a read-only instance. |
+| `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or exported plain JSON file as a read-only instance. |
 | `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove
@@ -269,6 +276,12 @@ npm run package   # produce a .vsix
 ```
 
 Press **F5** to launch the Extension Development Host.
+  
+  ## Top Contributors
+  
+  <a href="https://github.com/sukanta1991/opentelemetry/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=sukanta1991/opentelemetry&max=100" alt="Top 100 contributors to OpenTelemetry for VS Code" />
+  </a>
 
 ## License
 

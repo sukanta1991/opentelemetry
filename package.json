@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "Runtime observability inside VS Code: collect and explore OpenTelemetry logs, metrics, traces, spans, and a service map via an embedded OTLP receiver.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "MIT",
@@ -314,7 +314,7 @@
           "type": "number",
           "default": 200,
           "minimum": 1,
-          "description": "Maximum size, in megabytes, of a log file that can be imported. Larger files are rejected before being read into memory."
+          "description": "Maximum size, in megabytes, of a log file (.json, .jsonl or .ndjson) that can be imported. Larger files are rejected before being read into memory."
         },
         "otel.import.maxRecords": {
           "type": "number",
