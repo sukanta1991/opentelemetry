@@ -283,3 +283,130 @@ describe('import: round-trips an export', () => {
     );
   });
 });
+
+describe('import: JSON Lines', () => {
+  // Shape of a real vendor archive export: payload, labels and metadata in separate branches.
+  function vendorLine(over: { message?: string; severity?: string; timestamp?: number } = {}): string {
+    return JSON.stringify({
+      $d: {
+        cx_metadata: {
+          cloud_provider: 'aws',
+          cloud_region: 'us-west-2',
+          faas_name: 'job-aggregator',
+          span_id: '57cff879f5b93ff7',
+          trace_id: '6ab125bfce546e3cb5c05f5c14b3a576',
+        },
+        message: over.message ?? 'fail: Archer.JobEngine.Aggregator.Program[0]\n      boom',
+      },
+      $l: {
+        applicationname: 'us-west-2-service-dev-job-aggregator',
+        category: null,
+        computername: '',
+        subsystemname: 'usw2-sdev-job-aggregator',
+      },
+      $m: {
+        ingressTimestamp: 1_789_994_461_583_000_000,
+        logid: '971068aa-ff50-4b51-9b10-c7ac14d43f3f',
+        severity: over.severity ?? 'Error',
+        timestamp: over.timestamp ?? 1_789_994_431_659_000_000,
+        timestampMicros: 1_789_994_431_659_000,
+      },
+    });
+  }
+
+  it('maps a nested vendor export onto log records', () => {
+    const out = parseLogFile(`${vendorLine()}\n${vendorLine()}\n`, 100);
+    assert.strictEqual(out.logs.length, 2);
+
+    const l = out.logs[0];
+    assert.strictEqual(l.timeMs, 1_789_994_431_659, 'nanosecond epoch scaled to ms');
+    assert.strictEqual(l.observedTimeMs, 1_789_994_461_583, 'ingress timestamp is observed time');
+    assert.strictEqual(l.severityNumber, 17);
+    assert.strictEqual(l.severityText, 'Error');
+    assert.strictEqual(l.body, 'fail: Archer.JobEngine.Aggregator.Program[0]\n      boom');
+    assert.strictEqual(l.traceId, '6ab125bfce546e3cb5c05f5c14b3a576');
+    assert.strictEqual(l.spanId, '57cff879f5b93ff7');
+    assert.strictEqual(out.serviceName, 'us-west-2-service-dev-job-aggregator');
+    assert.strictEqual(out.resourceAttrs['service.name'], 'us-west-2-service-dev-job-aggregator');
+  });
+
+  it('keeps unclaimed fields as attributes under their full path', () => {
+    const out = parseLogFile(vendorLine(), 100);
+    const attrs = out.logs[0].attrs;
+    assert.strictEqual(attrs['$d.cx_metadata.cloud_region'], 'us-west-2');
+    assert.strictEqual(attrs['$m.logid'], '971068aa-ff50-4b51-9b10-c7ac14d43f3f');
+    assert.ok(!('$d.message' in attrs), 'consumed fields are not duplicated into attrs');
+    assert.ok(!('$l.category' in attrs), 'null placeholders are dropped');
+    assert.ok(!('$l.computername' in attrs), 'empty placeholders are dropped');
+  });
+
+  it('detects the timestamp unit from its magnitude', () => {
+    const at = (timestamp: number | string): number =>
+      parseLogFile(JSON.stringify({ timestamp, message: 'x' }), 10).logs[0].timeMs;
+    assert.strictEqual(at(1_789_994_431), 1_789_994_431_000, 'seconds');
+    assert.strictEqual(at(1_789_994_431_659), 1_789_994_431_659, 'milliseconds');
+    assert.strictEqual(at(1_789_994_431_659_000), 1_789_994_431_659, 'microseconds');
+    assert.strictEqual(at('1789994431659000000'), 1_789_994_431_659, 'nanoseconds as a string');
+    assert.strictEqual(at('2026-09-21T12:40:31.659Z'), 1_789_994_431_659, 'ISO-8601');
+  });
+
+  it('does not mistake a near-miss key for the timestamp', () => {
+    const out = parseLogFile(
+      JSON.stringify({ timestampMicros: 1_789_994_431_659_000, timestamp: 1_700_000_000_000, msg: 'x' }),
+      10
+    );
+    assert.strictEqual(out.logs[0].timeMs, 1_700_000_000_000);
+  });
+
+  it('falls back to the log-line prefix when no severity field exists', () => {
+    const out = parseLogFile(JSON.stringify({ message: 'warn: Something[0]\n  odd' }), 10);
+    assert.strictEqual(out.logs[0].severityNumber, 13);
+    assert.strictEqual(out.logs[0].severityText, 'WARN');
+  });
+
+  it('skips unreadable lines and reports the count', () => {
+    const out = parseLogFile(`${vendorLine()}\nnot json\n[]\n${vendorLine()}\n`, 100);
+    assert.strictEqual(out.logs.length, 2);
+    assert.strictEqual(out.skipped, 2);
+    assert.ok(out.skippedSample?.startsWith('line 2:'));
+  });
+
+  it('fails when no line can be read', () => {
+    assert.throws(() => parseLogFile('{oops}\n{also oops}\n', 100), LogImportError);
+  });
+
+  it('rejects a file above the record limit', () => {
+    const text = `${vendorLine()}\n${vendorLine()}\n${vendorLine()}\n`;
+    assert.throws(() => parseLogFile(text, 2), /more than 2 records/);
+  });
+
+  it('refuses prototype-polluting keys without aborting the import', () => {
+    // Written as raw text: an object literal would set the prototype instead of an own key.
+    const hostile = '{"message":"x","nested":{"__proto__":{"polluted":true}}}';
+    const out = parseLogFile(`${hostile}\n${vendorLine()}\n`, 100);
+    assert.strictEqual(out.skipped, 1);
+    assert.strictEqual(({} as Record<string, unknown>).polluted, undefined);
+  });
+
+  it('refuses over-deep nesting without recursing away the stack', () => {
+    let deep: Record<string, unknown> = { message: 'x' };
+    for (let i = 0; i < 40; i++) deep = { n: deep };
+    const out = parseLogFile(`${JSON.stringify(deep)}\n${vendorLine()}\n`, 100);
+    assert.strictEqual(out.skipped, 1);
+    assert.strictEqual(out.logs.length, 1);
+  });
+
+  it('ignores blank lines and a leading byte-order mark', () => {
+    const out = parseLogFile(`\uFEFF${vendorLine()}\n\n\n${vendorLine()}\n`, 100);
+    assert.strictEqual(out.logs.length, 2);
+    assert.strictEqual(out.skipped, 0);
+  });
+
+  it('leaves the single-document formats alone', () => {
+    assert.strictEqual(parseLogFile(exportOtlpJson([log(1)], instance), 100).skipped, undefined);
+    assert.strictEqual(
+      parseLogFile(exportPlainJson([log(1)], instance, 'all', []), 100).skipped,
+      undefined
+    );
+  });
+});

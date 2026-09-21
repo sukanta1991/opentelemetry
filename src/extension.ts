@@ -160,7 +160,7 @@ async function importLogs(): Promise<void> {
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: false,
     openLabel: 'Import Logs',
-    filters: { 'Log files': ['json'] },
+    filters: { 'Log files': ['json', 'jsonl', 'ndjson'] },
   });
   const uri = picked?.[0];
   if (!uri) return;
@@ -180,7 +180,7 @@ async function importLogs(): Promise<void> {
       return;
     }
 
-    const id = await vscode.window.withProgress(
+    const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Importing logs…' },
       async () => {
         const bytes = await vscode.workspace.fs.readFile(uri);
@@ -188,19 +188,25 @@ async function importLogs(): Promise<void> {
           new TextDecoder('utf-8', { fatal: false }).decode(bytes),
           settings.importMaxRecords
         );
-        return controller.store.importLogs({
-          serviceName: parsed.serviceName,
-          resourceAttrs: parsed.resourceAttrs,
-          logs: parsed.logs,
-          sourceLabel: uri.path.split('/').pop() || 'imported.json',
-        });
+        return {
+          id: controller.store.importLogs({
+            serviceName: parsed.serviceName,
+            resourceAttrs: parsed.resourceAttrs,
+            logs: parsed.logs,
+            sourceLabel: uri.path.split('/').pop() || 'imported',
+          }),
+          skipped: parsed.skipped ?? 0,
+        };
       }
     );
 
-    LogsPanel.show(controller, id);
-    const inst = controller.store.getInstance(id);
+    LogsPanel.show(controller, result.id);
+    const inst = controller.store.getInstance(result.id);
+    const skippedNote = result.skipped
+      ? ` ${result.skipped} unreadable line${result.skipped === 1 ? '' : 's'} skipped.`
+      : '';
     vscode.window.showInformationMessage(
-      `Imported ${inst?.logCount ?? 0} logs from ${inst?.source ?? 'file'}.`
+      `Imported ${inst?.logCount ?? 0} logs from ${inst?.source ?? 'file'}.${skippedNote}`
     );
   } catch (e) {
     const message = e instanceof LogImportError ? e.message : (e as Error).message;

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-22
+
+### Added
+
+- Logs import: JSON Lines files (`.jsonl` or `.ndjson`) are now supported alongside OTLP/JSON
+  and exported plain JSON.
+
+### Fixed
+
+- Logs panel: generated table rows now render correctly while telemetry cell values remain escaped.
+
 ## [0.3.0] - 2026-09-20
 
 ### Added

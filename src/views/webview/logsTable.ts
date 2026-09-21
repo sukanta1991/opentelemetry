@@ -287,15 +287,6 @@ function spacer(height: number, span: number): string {
     : '';
 }
 
-function sanitizeHtml(html: string): string {
-  return html
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function paint(): void {
   const cols = visibleColumns();
   const span = Math.max(1, cols.length);
@@ -320,6 +311,7 @@ function paint(): void {
     html.push('</tr>');
   }
   html.push(spacer(total - offsets[end], span));
+  // Safe as markup: every interpolated value is either a number or passed through esc().
   tbody.innerHTML = html.join('');
 
   measureRendered(start, end);
