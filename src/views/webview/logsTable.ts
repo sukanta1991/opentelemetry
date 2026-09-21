@@ -320,7 +320,7 @@ function paint(): void {
     html.push('</tr>');
   }
   html.push(spacer(total - offsets[end], span));
-  tbody.innerHTML = sanitizeHtml(html.join(''));
+  tbody.innerHTML = html.join('');
 
   measureRendered(start, end);
 }
