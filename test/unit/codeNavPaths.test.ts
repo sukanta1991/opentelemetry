@@ -19,6 +19,8 @@ describe('codeNavPaths', () => {
 
     it('converts file URIs to paths', () => {
       assert.strictEqual(sanitizeFilePath('file:///tmp/my%20file.ts'), '/tmp/my file.ts');
+      assert.strictEqual(sanitizeFilePath('file:///C:/repo/a.ts'), 'C:/repo/a.ts');
+      assert.strictEqual(sanitizeFilePath('file://evil.test/share/a.ts'), undefined);
     });
 
     it('rejects other schemes', () => {
