@@ -64,8 +64,7 @@ Service map — services, databases, queues, and external dependencies inferred 
     attributes, a record count, and whether to export the filtered, all, or selected rows.
   - **Import** OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or previously exported plain JSON as a read-only instance under the **Imported** node, kept separate from live telemetry.
   - **Navigate To Code** to jump to the source line, and **Open In Editor** to view a log as JSON.
-- **Traces & spans** — filter by duration, trace ID, or errors, and **Examine** any trace as a
-  span waterfall. Distributed spans are merged by trace ID.
+- **Traces & spans** — filter by duration, trace ID, errors, or span attribute (`key` or `key=value`), and **Examine** any trace as a span waterfall. Click a span to see its attributes, events, status, and IDs in a details pane. Distributed spans are merged by trace ID.
 - **Metrics** — per-instance gauges, counters/sums, and histograms with a **Table | Graph**
   toggle. The Graph view plots time-series history built up as telemetry streams in:
   - **Gauges & sums** → multi-series line charts (one line per attribute set), on a shared time axis.
@@ -136,7 +135,7 @@ OTLP exporter target.
 
 1. Start your app and generate some traffic.
 2. Open **Traces**, tick **errors only**, and select the failed trace.
-3. Click **Examine** to open the span waterfall and find the slow or failing span.
+3. Click **Examine** to open the span waterfall, find the slow or failing span, and click it to inspect its attributes and events.
 4. Open **Logs**, filter by text or level, and use **Navigate To Code** to jump to the source.
 
 **Share a log sample with a teammate**

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-24
+
+### Added
+
+- Traces panel: click a span in the waterfall (or focus it and press Enter/Space) to open a **span details** pane with its status, duration, IDs, scope, **attributes** and **events**. Structured values are pretty-printed as JSON and long values scroll in place ([#13](https://github.com/sukanta1991/opentelemetry/issues/13)).
+- Traces panel: an **attribute filter** (`key` or `key=value`) narrows the trace list to traces with a span that has the attribute, or whose value contains the text (case-insensitive).
+
+### Fixed
+
+- Traces panel: quotes in span names no longer break the waterfall row tooltip.
+
 ## [0.3.1] - 2026-09-22
 
 ### Added
