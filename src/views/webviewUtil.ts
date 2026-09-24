@@ -1,12 +1,8 @@
+import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 
 export function getNonce(): string {
-  let text = '';
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  for (let i = 0; i < 32; i++) {
-    text += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return text;
+  return randomBytes(16).toString('base64url');
 }
 
 export function getUri(
@@ -109,4 +105,73 @@ const baseCss = `
   .empty { padding: 24px; text-align: center; color: var(--vscode-descriptionForeground); }
   code, pre { font-family: var(--vscode-editor-font-family, monospace); }
 `;
+
+// Resizable/sortable columns, the column picker popover and the time-range picker.
+export const COLUMN_TABLE_CSS = `
+  table { table-layout: fixed; }
+  th.sortable { cursor: pointer; }
+  th .sort-ind { margin-left: 4px; opacity: 0.8; }
+  .col-resizer {
+    position: absolute; top: 0; right: -3px; width: 7px; height: 100%;
+    cursor: col-resize; user-select: none; z-index: 3; touch-action: none;
+  }
+  .col-resizer::after {
+    content: ''; position: absolute; top: 20%; right: 3px; width: 1px; height: 60%;
+    background: var(--vscode-panel-border);
+  }
+  th:hover .col-resizer::after { background: var(--vscode-focusBorder); }
+  body.col-resizing { cursor: col-resize; user-select: none; }
+  tr.spacer td { padding: 0; border: 0; }
+  th.measuring, td.measuring { white-space: nowrap !important; }
+
+  .popover {
+    position: fixed; z-index: 20; min-width: 280px; max-width: 360px;
+    max-height: 70vh; overflow: auto; padding: 8px;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+    border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
+  .popover[hidden] { display: none; }
+  .popover-head { display: flex; gap: 6px; margin-bottom: 6px; }
+  .popover-head input { flex: 1 1 auto; min-width: 0; }
+  .col-group {
+    margin: 10px 0 2px; font-size: 0.82em; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--vscode-descriptionForeground);
+  }
+  .col-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 4px; border-radius: 3px;
+  }
+  .col-item:hover { background: var(--vscode-list-hoverBackground); }
+  .col-item label {
+    display: flex; align-items: center; gap: 6px;
+    flex: 1 1 auto; min-width: 0; cursor: pointer;
+  }
+  .col-item label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shown-item { cursor: grab; }
+  .shown-item.dragging { opacity: 0.4; }
+  .shown-item.drop-before { box-shadow: inset 0 2px 0 var(--vscode-focusBorder); }
+  .shown-item.drop-after { box-shadow: inset 0 -2px 0 var(--vscode-focusBorder); }
+  .drag-handle { flex: 0 0 auto; color: var(--vscode-descriptionForeground); }
+  .hide-btn {
+    flex: 0 0 auto; background: none; border: none; padding: 0 4px;
+    color: var(--vscode-descriptionForeground); cursor: pointer;
+  }
+  .hide-btn:hover { background: none; color: var(--vscode-foreground); }
+  .col-note { padding: 4px; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+
+  .range-picker {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+    border-radius: 3px;
+    background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
+  }
+  .range-picker:focus-within { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+  .range-picker .range-icon { flex: 0 0 auto; opacity: 0.8; }
+  .range-picker select { border: none; background: transparent; color: inherit; font-size: 0.9em; padding: 2px 0; }
+  .range-picker select:focus { outline: none; }
+`;
+
+export const RANGE_ICON_SVG =
+  '<svg class="range-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5A5.5 5.5 0 1 1 8 13.5 5.5 5.5 0 0 1 8 2.5zM7.25 4v4.31l3 1.73.75-1.3-2.25-1.3V4h-1.5z"/></svg>';
 

@@ -4,6 +4,7 @@
 
 import { AttributeValue, StoredLogRecord } from '../../store/model';
 import { severityLabel } from '../format';
+import * as cols from './columnState';
 import {
   ATTRS_SUMMARY_MAX,
   ATTR_KEY_LIMIT,
@@ -16,6 +17,15 @@ import {
   isLogColumnId,
   parseAttrColumn,
 } from './logColumns';
+import {
+  DEFAULT_TIME_RANGE,
+  TIME_RANGE_LABEL,
+  TIME_RANGE_OPTIONS,
+  TIME_RANGE_SECONDS,
+  TimeRangeKind,
+  isTimeRangeKind,
+  windowBounds,
+} from './timeRange';
 
 // The record shape posted to the webview. Identical to what the store holds, so the host
 // can forward records without reshaping them.
@@ -50,48 +60,16 @@ export function isLogDensity(v: unknown): v is LogDensity {
 
 // --- Time range ------------------------------------------------------------------------
 
-export type LogRangeKind = '1m' | '2m' | '5m' | '15m' | '30m' | '1h' | '2h' | 'all';
-
-export const LOG_RANGE_OPTIONS: LogRangeKind[] = ['1m', '2m', '5m', '15m', '30m', '1h', '2h', 'all'];
-
-export const LOG_RANGE_SECONDS: Record<LogRangeKind, number> = {
-  '1m': 60,
-  '2m': 120,
-  '5m': 300,
-  '15m': 900,
-  '30m': 1800,
-  '1h': 3600,
-  '2h': 7200,
-  all: Infinity,
-};
-
-export const LOG_RANGE_LABEL: Record<LogRangeKind, string> = {
-  '1m': 'Last 1 min',
-  '2m': 'Last 2 min',
-  '5m': 'Last 5 min',
-  '15m': 'Last 15 min',
-  '30m': 'Last 30 min',
-  '1h': 'Last 1 hour',
-  '2h': 'Last 2 hours',
-  all: 'All logs',
-};
-
-export const DEFAULT_LOG_RANGE: LogRangeKind = '5m';
-
-export function isLogRangeKind(v: unknown): v is LogRangeKind {
-  return typeof v === 'string' && v in LOG_RANGE_SECONDS;
-}
+export type LogRangeKind = TimeRangeKind;
+export const LOG_RANGE_OPTIONS = TIME_RANGE_OPTIONS;
+export const LOG_RANGE_SECONDS = TIME_RANGE_SECONDS;
+export const LOG_RANGE_LABEL: Record<LogRangeKind, string> = { ...TIME_RANGE_LABEL, all: 'All logs' };
+export const DEFAULT_LOG_RANGE: LogRangeKind = DEFAULT_TIME_RANGE;
+export const isLogRangeKind = isTimeRangeKind;
+export { windowBounds };
 
 export function logTimeMs(l: WireLog): number {
   return l.timeMs || l.observedTimeMs || 0;
-}
-
-// Anchored to the newest record rather than the wall clock, so rows stay visible after the
-// emitting app stops. Mirrors the metrics panel's windowBounds().
-export function windowBounds(newestTimeMs: number, range: LogRangeKind): [number, number] {
-  if (range === 'all') return [-Infinity, Infinity];
-  const to = Number.isFinite(newestTimeMs) && newestTimeMs > 0 ? newestTimeMs : Date.now();
-  return [to - LOG_RANGE_SECONDS[range] * 1000, Infinity];
 }
 
 // --- Sorting ---------------------------------------------------------------------------
@@ -266,6 +244,9 @@ export interface LogFilter {
   level: number;
   attrFilter: string;
   range: LogRangeKind;
+  // Exact-match correlation; while either is set the time range is ignored.
+  traceId?: string;
+  spanId?: string;
 }
 
 export interface LogHaystack {
@@ -321,9 +302,12 @@ export function filterLogs(
 ): WireLog[] {
   const text = f.query.toLowerCase();
   const a = f.attrFilter.trim().toLowerCase();
-  const [from] = windowBounds(newestTimeMs, f.range);
+  const correlating = !!(f.traceId || f.spanId);
+  const from = correlating ? -Infinity : windowBounds(newestTimeMs, f.range)[0];
   const out: WireLog[] = [];
   for (const l of logs) {
+    if (f.traceId && l.traceId !== f.traceId) continue;
+    if (f.spanId && l.spanId !== f.spanId) continue;
     if (l.severityNumber < f.level) continue;
     if (from > -Infinity && logTimeMs(l) < from) continue;
     if (text || a) {
@@ -370,11 +354,7 @@ export function pruneSelection(
 
 // --- Persisted panel state -------------------------------------------------------------
 
-export interface LogColumnState {
-  id: LogColumnId;
-  visible: boolean;
-  width: number;
-}
+export type LogColumnState = cols.ColumnState<LogColumnId>;
 
 export interface LogsPanelState {
   v: 2;
@@ -393,16 +373,13 @@ export function defaultColumnState(): LogColumnState[] {
 
 // --- Column reducers (pure) ------------------------------------------------------------
 
-// A column absent from the list is appended; this is how `attr:<key>` columns are created.
 export function setColumnVisibility(
   columns: readonly LogColumnState[],
   id: LogColumnId,
   visible: boolean,
   width = DEFAULT_ATTR_COLUMN_WIDTH
 ): LogColumnState[] {
-  const next = columns.map((c) => (c.id === id ? { ...c, visible } : c));
-  if (!next.some((c) => c.id === id) && visible) next.push({ id, visible: true, width });
-  return next;
+  return cols.setColumnVisibility(columns, id, visible, width);
 }
 
 export function setColumnWidth(
@@ -410,26 +387,15 @@ export function setColumnWidth(
   id: LogColumnId,
   width: number
 ): LogColumnState[] {
-  const min = columnDef(id).minWidth;
-  return columns.map((c) => (c.id === id ? { ...c, width: Math.max(min, Math.round(width)) } : c));
+  return cols.setColumnWidth(columns, id, width, columnDef(id).minWidth);
 }
 
-export function moveColumn(
+export const moveColumn: (
   columns: readonly LogColumnState[],
   dragId: LogColumnId,
   targetId: LogColumnId,
   after: boolean
-): LogColumnState[] {
-  const next = columns.slice();
-  if (dragId === targetId) return next;
-  const from = next.findIndex((c) => c.id === dragId);
-  if (from < 0) return next;
-  const [moved] = next.splice(from, 1);
-  const to = next.findIndex((c) => c.id === targetId);
-  if (to < 0) return columns.slice();
-  next.splice(after ? to + 1 : to, 0, moved);
-  return next;
-}
+) => LogColumnState[] = cols.moveColumn;
 
 // Bounded so a high-cardinality producer cannot flood the column picker.
 export function collectAttrKeys(

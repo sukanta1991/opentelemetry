@@ -1,6 +1,10 @@
 // Pure, framework-agnostic column registry for the logs table, shared by the extension host,
 // the webview bundle, and unit tests. Must not import vscode, DOM, or uplot.
 
+import { ATTR_COLUMN_PREFIX, isAttrColumn, parseAttrColumn } from './columnState';
+
+export { ATTR_COLUMN_PREFIX, isAttrColumn, parseAttrColumn };
+
 export type LogColumnGroup = 'core' | 'trace' | 'code' | 'attributes';
 
 // Fixed column ids plus dynamic `attr:<key>` columns promoted from log attributes.
@@ -33,7 +37,6 @@ export interface LogColumnDef {
 export const MIN_COL_WIDTH = 60;
 export const ATTR_KEY_LIMIT = 500;
 export const ATTRS_SUMMARY_MAX = 512;
-export const ATTR_COLUMN_PREFIX = 'attr:';
 export const DEFAULT_ATTR_COLUMN_WIDTH = 160;
 
 // Default widths for time/level/message/attributes match the pre-migration table exactly.
@@ -65,15 +68,6 @@ const BY_ID = new Map<string, LogColumnDef>(LOG_COLUMNS.map((c) => [c.id, c]));
 
 export function attrColumnId(key: string): LogColumnId {
   return `${ATTR_COLUMN_PREFIX}${key}`;
-}
-
-// Attribute keys may themselves contain ':', so only the first separator is consumed.
-export function parseAttrColumn(id: string): string | undefined {
-  return id.startsWith(ATTR_COLUMN_PREFIX) ? id.slice(ATTR_COLUMN_PREFIX.length) : undefined;
-}
-
-export function isAttrColumn(id: string): boolean {
-  return id.startsWith(ATTR_COLUMN_PREFIX) && id.length > ATTR_COLUMN_PREFIX.length;
 }
 
 export function isLogColumnId(v: unknown): v is LogColumnId {

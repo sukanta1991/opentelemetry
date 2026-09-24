@@ -66,6 +66,29 @@ export interface Application {
   instances: Instance[];
 }
 
+export interface TaggedSpan {
+  span: Span;
+  serviceName: string;
+  instanceId: string;
+}
+
+// One instance's share of a trace; a distributed trace has one part per participating instance.
+export interface TracePart {
+  instanceId: string;
+  serviceName: string;
+  trace: Trace;
+}
+
+export interface TraceLog {
+  instanceId: string;
+  log: StoredLogRecord;
+}
+
+export interface TraceLogs {
+  items: TraceLog[];
+  truncated: boolean;
+}
+
 type Listener = () => void;
 
 export class TelemetryStore {
@@ -129,7 +152,9 @@ export class TelemetryStore {
     return [...byApp.entries()]
       .map(([name, instances]) => ({
         name,
-        instances: instances.sort((a, b) => b.lastSeen - a.lastSeen),
+        instances: instances.sort((a, b) =>
+          (a.serviceInstanceId ?? a.id).localeCompare(b.serviceInstanceId ?? b.id)
+        ),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -334,10 +359,12 @@ export class TelemetryStore {
     trace.endMs = Math.max(trace.endMs, span.endMs);
     trace.durationMs = Math.max(0, trace.endMs - trace.startMs);
     if (span.statusCode === 'ERROR') trace.hasError = true;
-    if (!span.parentSpanId || !trace.spans.has(span.parentSpanId)) {
-      // tentative root; finalize on read
+    if (!span.parentSpanId) {
+      const current = trace.rootSpanId ? trace.spans.get(trace.rootSpanId) : undefined;
+      if (!current || span.startMs < current.startMs) {
+        trace.rootSpanId = span.spanId;
+      }
     }
-    if (!span.parentSpanId) trace.rootSpanId = span.spanId;
     trace.lastUpdated = Date.now();
   }
 
@@ -451,26 +478,81 @@ export class TelemetryStore {
   }
 
   /** Merge spans for a trace id across all instances, tagging each with its service. */
-  getSpansForTrace(traceId: string): { span: Span; serviceName: string }[] {
-    const out: { span: Span; serviceName: string }[] = [];
+  getSpansForTrace(traceId: string): TaggedSpan[] {
+    const out: TaggedSpan[] = [];
     for (const inst of this.instances.values()) {
       const trace = inst.traces.get(traceId);
       if (!trace) continue;
       for (const span of trace.spans.values()) {
-        out.push({ span, serviceName: inst.serviceName });
+        out.push({ span, serviceName: inst.serviceName, instanceId: inst.id });
       }
     }
     return out;
   }
 
   /** All spans across all instances, tagged with service name (for the service map). */
-  getAllTaggedSpans(): { span: Span; serviceName: string }[] {
-    const out: { span: Span; serviceName: string }[] = [];
+  getAllTaggedSpans(): TaggedSpan[] {
+    const out: TaggedSpan[] = [];
     for (const inst of this.instances.values()) {
       for (const trace of inst.traces.values()) {
         for (const span of trace.spans.values()) {
-          out.push({ span, serviceName: inst.serviceName });
+          out.push({ span, serviceName: inst.serviceName, instanceId: inst.id });
         }
+      }
+    }
+    return out;
+  }
+
+  findTraceInstances(traceId: string): string[] {
+    const out: string[] = [];
+    for (const inst of this.instances.values()) {
+      if (inst.traces.has(traceId)) out.push(inst.id);
+    }
+    return out;
+  }
+
+  getTraceParts(traceId: string): TracePart[] {
+    const out: TracePart[] = [];
+    for (const inst of this.instances.values()) {
+      const trace = inst.traces.get(traceId);
+      if (trace) out.push({ instanceId: inst.id, serviceName: inst.serviceName, trace });
+    }
+    return out;
+  }
+
+  /** Logs correlated with a trace (optionally one span) across all instances, oldest first. */
+  getLogsForTrace(traceId: string, opts: { spanId?: string; limit?: number } = {}): TraceLogs {
+    const items: TraceLog[] = [];
+    for (const inst of this.instances.values()) {
+      for (const log of inst.logs.view()) {
+        if (log.traceId !== traceId) continue;
+        if (opts.spanId !== undefined && log.spanId !== opts.spanId) continue;
+        items.push({ instanceId: inst.id, log });
+      }
+    }
+    items.sort((a, b) => a.log.timeMs - b.log.timeMs || a.log.seq - b.log.seq);
+    const limit = opts.limit ?? Infinity;
+    if (items.length <= limit) return { items, truncated: false };
+    return { items: items.slice(items.length - Math.max(0, limit)), truncated: true };
+  }
+
+  countLogsByInstance(traceId: string, spanId?: string): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const inst of this.instances.values()) {
+      let n = 0;
+      for (const log of inst.logs.view()) {
+        if (log.traceId === traceId && (spanId === undefined || log.spanId === spanId)) n++;
+      }
+      if (n) out.set(inst.id, n);
+    }
+    return out;
+  }
+
+  countLogsByTrace(): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const inst of this.instances.values()) {
+      for (const log of inst.logs.view()) {
+        if (log.traceId) out.set(log.traceId, (out.get(log.traceId) ?? 0) + 1);
       }
     }
     return out;

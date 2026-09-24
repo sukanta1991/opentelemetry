@@ -1,7 +1,7 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
 import { StoredLogRecord } from '../store/model';
+import { openCodeLocation } from './codeNav';
 import {
   ExportData,
   ExportFormat,
@@ -12,7 +12,7 @@ import {
 import { serializeLog } from './logSerialize';
 import { isLogColumnId } from './webview/logColumns';
 import { WireLog } from './webview/logView';
-import { getNonce, getUri, htmlShell } from './webviewUtil';
+import { COLUMN_TABLE_CSS, getNonce, getUri, htmlShell } from './webviewUtil';
 
 // Settings the webview may ask the host to reveal; never pass through an arbitrary key.
 const OPENABLE_SETTINGS = new Set(['otel.retention.maxLogsPerInstance']);
@@ -30,6 +30,16 @@ function isExportFormat(v: unknown): v is ExportFormat {
   return v === 'otlp' || v === 'json' || v === 'csv';
 }
 
+export interface LogsCorrelation {
+  traceId: string;
+  spanId?: string;
+  focusSeq?: number;
+}
+
+export interface LogsShowOptions {
+  correlate?: LogsCorrelation;
+}
+
 export class LogsPanel {
   private static panels = new Map<string, LogsPanel>();
 
@@ -39,20 +49,24 @@ export class LogsPanel {
   private lastOldestSeq = -1;
   private ready = false;
   private pendingPrompt = false;
+  private pendingCorrelate: LogsCorrelation | undefined;
 
-  static show(controller: OtelController, instanceId: string): void {
-    const existing = LogsPanel.panels.get(instanceId);
-    if (existing) {
-      existing.panel.reveal(vscode.ViewColumn.Active);
-      return;
-    }    const inst = controller.store.getInstance(instanceId);
-    const title = inst ? `Logs: ${inst.serviceName}` : 'Logs';
-    const panel = vscode.window.createWebviewPanel('otel.logs', title, vscode.ViewColumn.Active, {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-      localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
-    });
-    LogsPanel.panels.set(instanceId, new LogsPanel(panel, controller, instanceId));
+  static show(controller: OtelController, instanceId: string, opts: LogsShowOptions = {}): void {
+    let target = LogsPanel.panels.get(instanceId);
+    if (target) {
+      target.panel.reveal(vscode.ViewColumn.Active);
+    } else {
+      const inst = controller.store.getInstance(instanceId);
+      const title = inst ? `Logs: ${inst.serviceName}` : 'Logs';
+      const panel = vscode.window.createWebviewPanel('otel.logs', title, vscode.ViewColumn.Active, {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
+      });
+      target = new LogsPanel(panel, controller, instanceId);
+      LogsPanel.panels.set(instanceId, target);
+    }
+    if (opts.correlate) target.correlate(opts.correlate);
   }
 
   // Opens the panel (creating it if needed) and asks it to show the export options modal.
@@ -111,9 +125,11 @@ export class LogsPanel {
   }
 
   private async onMessage(m: unknown): Promise<void> {
-    const msg = m as { type?: string; seq?: number; lastSeq?: number; key?: string };
+    const msg = m as { type?: string; seq?: number; lastSeq?: number; key?: string; scope?: string };
     if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
       await this.navigateToCode(msg.seq);
+    } else if (msg?.type === 'viewTrace' && Number.isInteger(msg.seq)) {
+      await this.viewTrace(msg.seq as number, msg.scope === 'span');
     } else if (msg?.type === 'openInEditor' && typeof msg.seq === 'number') {
       await this.openInEditor(msg.seq);
     } else if (msg?.type === 'openSetting' && OPENABLE_SETTINGS.has(msg.key as string)) {
@@ -135,29 +151,44 @@ export class LogsPanel {
         this.pendingPrompt = false;
         void this.panel.webview.postMessage({ type: 'promptExport' });
       }
+      if (this.pendingCorrelate) {
+        const c = this.pendingCorrelate;
+        this.pendingCorrelate = undefined;
+        this.postCorrelate(c);
+      }
     }
   }
 
-  private async navigateToCode(seq: number): Promise<void> {
+  private correlate(c: LogsCorrelation): void {
+    if (this.ready) this.postCorrelate(c);
+    else this.pendingCorrelate = c;
+  }
+
+  private postCorrelate(c: LogsCorrelation): void {
+    void this.panel.webview.postMessage({
+      type: 'correlate',
+      traceId: c.traceId,
+      spanId: c.spanId,
+      focusSeq: c.focusSeq,
+    });
+  }
+
+  // Ids come from the stored record, never from the webview message.
+  private async viewTrace(seq: number, withSpan: boolean): Promise<void> {
     const log = this.controller.store.findLog(this.instanceId, seq);
-    const loc = log?.codeLocation;
-    if (!loc) {
-      vscode.window.showInformationMessage(
-        'No code location on this log (requires code.filepath / code.lineno attributes).'
-      );
+    if (!log?.traceId) {
+      vscode.window.showInformationMessage('This log has no trace context.');
       return;
     }
-    const uri = await resolveWorkspaceFile(loc.filepath);
-    if (!uri) {
-      vscode.window.showWarningMessage(`Could not locate file: ${loc.filepath}`);
-      return;
-    }
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
-    const line = Math.max(0, (loc.line ?? 1) - 1);
-    const pos = new vscode.Position(line, Math.max(0, (loc.column ?? 1) - 1));
-    editor.selection = new vscode.Selection(pos, pos);
-    editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    await vscode.commands.executeCommand('otel._revealTrace', {
+      traceId: log.traceId,
+      spanId: withSpan ? log.spanId : undefined,
+      preferInstanceId: this.instanceId,
+    });
+  }
+
+  private async navigateToCode(seq: number): Promise<void> {
+    await openCodeLocation(this.controller.store.findLog(this.instanceId, seq)?.codeLocation);
   }
 
   private async openInEditor(seq: number): Promise<void> {
@@ -236,31 +267,8 @@ export class LogsPanel {
   }
 }
 
-async function resolveWorkspaceFile(filepath: string): Promise<vscode.Uri | undefined> {
-  if (path.isAbsolute(filepath)) {
-    const uri = vscode.Uri.file(filepath);
-    try {
-      await vscode.workspace.fs.stat(uri);
-      return uri;
-    } catch {
-      /* fall through to workspace search */
-    }
-  }
-  const base = path.basename(filepath);
-  const matches = await vscode.workspace.findFiles(`**/${base}`, '**/node_modules/**', 5);
-  if (matches.length === 1) return matches[0];
-  if (matches.length > 1) {
-    const rel = filepath.replace(/\\/g, '/');
-    return matches.find((u) => u.path.endsWith(rel)) ?? matches[0];
-  }
-  return undefined;
-}
-
-const STYLE = `
+const STYLE = `${COLUMN_TABLE_CSS}
   .rows { overflow: auto; }
-  table { table-layout: fixed; }
-  th.sortable { cursor: pointer; }
-  th .sort-ind { margin-left: 4px; opacity: 0.8; }
   td.msg { word-break: break-word; overflow-wrap: anywhere; }
   td.attrs { color: var(--vscode-descriptionForeground); font-size: 0.9em; word-break: break-word; overflow-wrap: anywhere; }
   td.time, td.sev, td.plain { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -278,65 +286,6 @@ const STYLE = `
   .sev-error, .sev-fatal { color: var(--vscode-errorForeground); }
   .sev-warn { color: var(--vscode-editorWarning-foreground, #cca700); }
   .count { margin-left: auto; }
-  .col-resizer {
-    position: absolute; top: 0; right: -3px; width: 7px; height: 100%;
-    cursor: col-resize; user-select: none; z-index: 3; touch-action: none;
-  }
-  .col-resizer::after {
-    content: ''; position: absolute; top: 20%; right: 3px; width: 1px; height: 60%;
-    background: var(--vscode-panel-border);
-  }
-  th:hover .col-resizer::after { background: var(--vscode-focusBorder); }
-  body.col-resizing { cursor: col-resize; user-select: none; }
-  tr.spacer td { padding: 0; border: 0; }
-  th.measuring, td.measuring { white-space: nowrap !important; }
-
-  .popover {
-    position: fixed; z-index: 20; min-width: 280px; max-width: 360px;
-    max-height: 70vh; overflow: auto; padding: 8px;
-    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
-    border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  }
-  .popover[hidden] { display: none; }
-  .popover-head { display: flex; gap: 6px; margin-bottom: 6px; }
-  .popover-head input { flex: 1 1 auto; min-width: 0; }
-  .col-group {
-    margin: 10px 0 2px; font-size: 0.82em; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--vscode-descriptionForeground);
-  }
-  .col-item {
-    display: flex; align-items: center; gap: 6px;
-    padding: 3px 4px; border-radius: 3px;
-  }
-  .col-item:hover { background: var(--vscode-list-hoverBackground); }
-  .col-item label {
-    display: flex; align-items: center; gap: 6px;
-    flex: 1 1 auto; min-width: 0; cursor: pointer;
-  }
-  .col-item label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .shown-item { cursor: grab; }
-  .shown-item.dragging { opacity: 0.4; }
-  .shown-item.drop-before { box-shadow: inset 0 2px 0 var(--vscode-focusBorder); }
-  .shown-item.drop-after { box-shadow: inset 0 -2px 0 var(--vscode-focusBorder); }
-  .drag-handle { flex: 0 0 auto; color: var(--vscode-descriptionForeground); }
-  .hide-btn {
-    flex: 0 0 auto; background: none; border: none; padding: 0 4px;
-    color: var(--vscode-descriptionForeground); cursor: pointer;
-  }
-  .hide-btn:hover { background: none; color: var(--vscode-foreground); }
-  .col-note { padding: 4px; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
-
-  .range-picker {
-    display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px;
-    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-    border-radius: 3px;
-    background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
-  }
-  .range-picker:focus-within { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-  .range-picker .range-icon { flex: 0 0 auto; opacity: 0.8; }
-  .range-picker select { border: none; background: transparent; color: inherit; font-size: 0.9em; padding: 2px 0; }
-  .range-picker select:focus { outline: none; }
 
   .hint {
     flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
@@ -390,6 +339,28 @@ const STYLE = `
     color: var(--vscode-badge-foreground); background: var(--vscode-badge-background);
   }
   .ro-badge[hidden] { display: none; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 1px 2px 1px 8px;
+    border-radius: 10px; font-size: 0.9em;
+    color: var(--vscode-badge-foreground); background: var(--vscode-badge-background);
+  }
+  .chip[hidden] { display: none; }
+  .chip .muted { color: inherit; opacity: 0.75; }
+  .chip-clear {
+    background: none; border: none; color: inherit; padding: 0 6px;
+    border-radius: 8px; cursor: pointer; line-height: 1.2;
+  }
+  .chip-clear:hover { background: rgba(128,128,128,0.3); }
+  .chip-clear:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+
+  .link {
+    display: block; max-width: 100%; padding: 0; border: none; background: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+    font: inherit; color: var(--vscode-textLink-foreground); cursor: pointer;
+  }
+  .link:hover { background: none; color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+  .link:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 `;
 
 const BODY = `
@@ -402,11 +373,17 @@ const BODY = `
     <select id="range" aria-label="Time range"></select>
   </span>
   <select id="density" aria-label="Row height"></select>
+  <span id="corrChip" class="chip" role="status" hidden>
+    <span id="corrLabel"></span>
+    <span class="muted">· time range ignored</span>
+    <button id="corrClear" class="chip-clear" aria-label="Clear trace filter" title="Clear trace filter (Esc)">×</button>
+  </span>
   <button id="pause" class="secondary" aria-pressed="false" title="Freeze the view; logs keep arriving in the background">Pause</button>
   <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
   <button id="exportBtn" class="secondary">Export…</button>
   <span id="roBadge" class="ro-badge" hidden></span>
   <button id="nav" class="secondary">Navigate To Code</button>
+  <button id="viewTrace" class="secondary" title="Open the focused log's trace waterfall" disabled>View Trace</button>
   <button id="open" class="secondary">Open In Editor</button>
   <span id="count" class="count muted"></span>
 </div>

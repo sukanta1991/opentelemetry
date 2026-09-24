@@ -18,8 +18,10 @@ import {
   Span,
   SpanEvent,
   SpanKind,
+  SpanLink,
   StatusCode,
 } from './model';
+import { normalizeSpanId, normalizeTraceId } from './ids';
 
 const HEX_TRACE = /^[0-9a-f]{32}$/i;
 const HEX_SPAN = /^[0-9a-f]{16}$/i;
@@ -162,7 +164,7 @@ function statusCode(c: unknown): StatusCode {
   return STATUS_MAP[String(c)] ?? 'UNSET';
 }
 
-function codeLocation(attrs: KeyValueMap): CodeLocation | undefined {
+export function codeLocation(attrs: KeyValueMap): CodeLocation | undefined {
   const filepath = attrString(attrs, 'code.filepath') || attrString(attrs, 'code.file.path');
   if (!filepath) return undefined;
   const line = toNumber(attrs['code.lineno'] ?? attrs['code.line.number']);
@@ -173,6 +175,20 @@ function codeLocation(attrs: KeyValueMap): CodeLocation | undefined {
 
 function scopeName(scope: any): string | undefined {
   return scope && typeof scope.name === 'string' && scope.name ? scope.name : undefined;
+}
+
+function spanLinks(list: unknown): SpanLink[] {
+  if (!Array.isArray(list)) return [];
+  const out: SpanLink[] = [];
+  for (const l of list) {
+    const traceId = normalizeTraceId(toHexId(l?.traceId));
+    const spanId = normalizeSpanId(toHexId(l?.spanId));
+    if (!traceId || !spanId) continue;
+    const link: SpanLink = { traceId, spanId, attrs: keyValues(l.attributes || []) };
+    if (typeof l.traceState === 'string' && l.traceState) link.traceState = l.traceState;
+    out.push(link);
+  }
+  return out;
 }
 
 export function decodeLogs(req: any): ResourceLogs[] {
@@ -191,8 +207,8 @@ export function decodeLogs(req: any): ResourceLogs[] {
           severityText: typeof lr.severityText === 'string' ? lr.severityText : '',
           body: anyValue(lr.body),
           attrs,
-          traceId: toHexId(lr.traceId),
-          spanId: toHexId(lr.spanId),
+          traceId: normalizeTraceId(toHexId(lr.traceId)),
+          spanId: normalizeSpanId(toHexId(lr.spanId)),
           scope,
           codeLocation: codeLocation(attrs),
         });
@@ -218,12 +234,13 @@ export function decodeTraces(req: any): ResourceSpans[] {
           name: typeof e.name === 'string' ? e.name : '',
           attrs: keyValues(e.attributes || []),
         }));
-        const traceId = toHexId(sp.traceId) || '';
-        const spanId = toHexId(sp.spanId) || '';
+        const traceId = normalizeTraceId(toHexId(sp.traceId)) ?? '';
+        const spanId = normalizeSpanId(toHexId(sp.spanId)) ?? '';
+        const attrs = keyValues(sp.attributes || []);
         spans.push({
           traceId,
           spanId,
-          parentSpanId: toHexId(sp.parentSpanId),
+          parentSpanId: normalizeSpanId(toHexId(sp.parentSpanId)),
           name: typeof sp.name === 'string' ? sp.name : '',
           kind: spanKind(sp.kind),
           startMs,
@@ -234,9 +251,11 @@ export function decodeTraces(req: any): ResourceSpans[] {
             sp.status && typeof sp.status.message === 'string' && sp.status.message
               ? sp.status.message
               : undefined,
-          attrs: keyValues(sp.attributes || []),
+          attrs,
           events,
+          links: spanLinks(sp.links),
           scope,
+          codeLocation: codeLocation(attrs),
         });
       }
     }

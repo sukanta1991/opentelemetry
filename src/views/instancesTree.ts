@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
 import { Application, Instance } from '../store/store';
+import { diffDescriptions, instanceDescription, instanceLabel, treeShape } from './instancesTreeModel';
+
+// Full refreshes clear VS Code's handle map, so under load they must be rare.
+const TREE_REFRESH_MS = 1000;
 
 export class AppNode {
   readonly kind = 'app';
-  constructor(public readonly app: Application) {}
+  constructor(public app: Application) {}
 }
 
 export class InstanceNode {
@@ -20,16 +24,84 @@ export class ImportedRootNode {
 type Node = AppNode | InstanceNode | ImportedRootNode;
 
 export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
-  private readonly emitter = new vscode.EventEmitter<Node | undefined | void>();
+  private readonly emitter = new vscode.EventEmitter<Node | Node[] | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
 
+  // Reused across refreshes: targeted refresh only works for elements VS Code already holds.
+  private readonly appNodes = new Map<string, AppNode>();
+  private readonly instanceNodes = new Map<string, InstanceNode>();
+  private readonly importedRoot = new ImportedRootNode();
+
+  private lastShape = '';
+  private lastDescriptions = new Map<string, string>();
+  private refreshTimer: NodeJS.Timeout | undefined;
+  private pendingFull = false;
+  private readonly disposables: { dispose(): void }[] = [];
+
   constructor(private readonly controller: OtelController) {
-    controller.store.onDidChange(() => this.emitter.fire());
-    controller.onDidChangeState(() => this.emitter.fire());
+    this.disposables.push(
+      controller.store.onDidChange(() => this.scheduleRefresh(false)),
+      controller.onDidChangeState(() => this.scheduleRefresh(true))
+    );
   }
 
   refresh(): void {
-    this.emitter.fire();
+    this.pendingFull = true;
+    this.flush();
+  }
+
+  dispose(): void {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+    for (const d of this.disposables) d.dispose();
+    this.emitter.dispose();
+  }
+
+  private scheduleRefresh(full: boolean): void {
+    this.pendingFull ||= full;
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => this.flush(), TREE_REFRESH_MS);
+  }
+
+  private flush(): void {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+
+    const store = this.controller.store;
+    const apps = store.getApplications();
+    const imported = store.getImportedInstances();
+    const all = [...apps.flatMap((a) => a.instances), ...imported];
+    const shape = treeShape(apps, imported);
+
+    if (this.pendingFull || shape !== this.lastShape) {
+      this.lastShape = shape;
+      this.pendingFull = false;
+      const ids = new Set(all.map((i) => i.id));
+      for (const id of this.instanceNodes.keys()) if (!ids.has(id)) this.instanceNodes.delete(id);
+      const names = new Set(apps.map((a) => a.name));
+      for (const name of this.appNodes.keys()) if (!names.has(name)) this.appNodes.delete(name);
+      this.lastDescriptions = diffDescriptions(new Map(), all).next;
+      this.emitter.fire();
+      return;
+    }
+
+    const { changed, next } = diffDescriptions(this.lastDescriptions, all);
+    this.lastDescriptions = next;
+    const nodes: InstanceNode[] = [];
+    for (const id of changed) {
+      const node = this.instanceNodes.get(id);
+      if (node) nodes.push(node);
+    }
+    if (nodes.length) this.emitter.fire(nodes);
+  }
+
+  private nodeFor(inst: Instance): InstanceNode {
+    let node = this.instanceNodes.get(inst.id);
+    if (!node) {
+      node = new InstanceNode(inst);
+      this.instanceNodes.set(inst.id, node);
+    }
+    return node;
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -38,6 +110,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       const item = new vscode.TreeItem('Imported', vscode.TreeItemCollapsibleState.Expanded);
       item.iconPath = new vscode.ThemeIcon('archive');
       item.contextValue = 'otelImportedRoot';
+      item.id = 'otel.importedRoot';
       item.description = `${imported.length} file${imported.length === 1 ? '' : 's'}`;
       item.tooltip = 'Logs loaded from a file. Read-only and not affected by Clear.';
       return item;
@@ -49,6 +122,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       );
       item.iconPath = new vscode.ThemeIcon('server-environment');
       item.contextValue = 'otelApplication';
+      item.id = `app::${node.app.name}`;
       item.description = `${node.app.instances.length} instance${
         node.app.instances.length === 1 ? '' : 's'
       }`;
@@ -60,7 +134,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       item.iconPath = new vscode.ThemeIcon('file-symlink-file');
       item.contextValue = 'otelImportedInstance';
       item.id = inst.id;
-      item.description = `${inst.source ?? 'file'} · ${inst.logCount} logs`;
+      item.description = instanceDescription(inst);
       item.tooltip = new vscode.MarkdownString(
         `**${inst.serviceName}** (imported)\n\n` +
           `- Source: \`${inst.source ?? 'n/a'}\`\n` +
@@ -70,12 +144,11 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       item.command = { command: 'otel.openLogs', title: 'Open Logs', arguments: [node] };
       return item;
     }
-    const label = inst.serviceInstanceId ?? inst.id.split('::')[1] ?? inst.id;
-    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    const item = new vscode.TreeItem(instanceLabel(inst), vscode.TreeItemCollapsibleState.None);
     item.iconPath = new vscode.ThemeIcon('vm');
     item.contextValue = 'otelInstance';
     item.id = inst.id;
-    item.description = `${inst.logCount} logs · ${inst.traces.size} traces · ${inst.metrics.size} metrics`;
+    item.description = instanceDescription(inst);
     item.tooltip = new vscode.MarkdownString(
       `**${inst.serviceName}**\n\n` +
         `- Instance: \`${inst.id}\`\n` +
@@ -92,15 +165,20 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
 
   getChildren(node?: Node): Node[] {
     if (!node) {
-      const nodes: Node[] = this.controller.store.getApplications().map((a) => new AppNode(a));
-      if (this.controller.store.getImportedInstances().length) nodes.push(new ImportedRootNode());
+      const nodes: Node[] = this.controller.store.getApplications().map((a) => {
+        let appNode = this.appNodes.get(a.name);
+        if (appNode) appNode.app = a;
+        else this.appNodes.set(a.name, (appNode = new AppNode(a)));
+        return appNode;
+      });
+      if (this.controller.store.getImportedInstances().length) nodes.push(this.importedRoot);
       return nodes;
     }
     if (node.kind === 'imported') {
-      return this.controller.store.getImportedInstances().map((i) => new InstanceNode(i));
+      return this.controller.store.getImportedInstances().map((i) => this.nodeFor(i));
     }
     if (node.kind === 'app') {
-      return node.app.instances.map((i) => new InstanceNode(i));
+      return node.app.instances.map((i) => this.nodeFor(i));
     }
     return [];
   }

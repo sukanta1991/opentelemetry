@@ -171,9 +171,35 @@
         "title": "Remove Instance",
         "category": "OpenTelemetry",
         "icon": "$(trash)"
+      },
+      {
+        "command": "otel.findTrace",
+        "title": "Find Trace by ID",
+        "category": "OpenTelemetry",
+        "icon": "$(search)"
+      },
+      {
+        "command": "otel._revealTrace",
+        "title": "Reveal Trace",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel._revealLogs",
+        "title": "Reveal Correlated Logs",
+        "category": "OpenTelemetry"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "otel._revealTrace",
+          "when": "false"
+        },
+        {
+          "command": "otel._revealLogs",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "otel.start",
@@ -204,6 +230,11 @@
           "command": "otel.openSettings",
           "when": "view == otel.instances",
           "group": "navigation@5"
+        },
+        {
+          "command": "otel.findTrace",
+          "when": "view == otel.instances",
+          "group": "2_find@1"
         }
       ],      "view/item/context": [
         {

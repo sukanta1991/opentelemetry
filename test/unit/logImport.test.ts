@@ -222,6 +222,38 @@ describe('import: hostile input', () => {
   });
 });
 
+describe('import: trace and span ids', () => {
+  const TRACE = '6ab125bfce546e3cb5c05f5c14b3a576';
+  const SPAN = '57cff879f5b93ff7';
+
+  it('canonicalises W3C ids from JSON Lines', () => {
+    const line = JSON.stringify({ message: 'x', trace_id: TRACE.toUpperCase(), span_id: `0x${SPAN}` });
+    const l = parseLogFile(line, 10).logs[0];
+    assert.strictEqual(l.traceId, TRACE);
+    assert.strictEqual(l.spanId, SPAN);
+  });
+
+  it('canonicalises dashed ids from plain JSON and OTLP/JSON', () => {
+    const dashed = '6ab125bf-ce54-6e3c-b5c0-5f5c14b3a576';
+    assert.strictEqual(parsePlainJson({ logs: [{ timeMs: 1, traceId: dashed }] }).logs[0].traceId, TRACE);
+    assert.strictEqual(
+      parseOtlpJson(otlpDoc([{ timeUnixNano: '1', traceId: dashed, spanId: SPAN.toUpperCase() }])).logs[0].spanId,
+      SPAN
+    );
+  });
+
+  it('drops all-zero and blank ids', () => {
+    const l = parsePlainJson({ logs: [{ timeMs: 1, traceId: '0'.repeat(32), spanId: '  ' }] }).logs[0];
+    assert.strictEqual(l.traceId, undefined);
+    assert.strictEqual(l.spanId, undefined);
+  });
+
+  it('keeps unrecognised vendor formats verbatim', () => {
+    const xray = '1-5759e988-bd862e3fe1be46a994272793';
+    assert.strictEqual(parsePlainJson({ logs: [{ timeMs: 1, traceId: xray }] }).logs[0].traceId, xray);
+  });
+});
+
 describe('import: round-trips an export', () => {
   const original = log(1, {
     observedTimeMs: 1_700_000_000_500,
