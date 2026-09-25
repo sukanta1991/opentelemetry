@@ -191,12 +191,16 @@ export function createWaterfallView(host: WaterfallHost): {
     return logs
       .map((l) => {
         const sev = severityBucket(l.severityNumber);
-        const skew = l.skew ? `<span class="skew" title="Log time is outside the span">${l.skew} span</span>` : '';
+        const seq = Number.isFinite(Number(l.seq)) ? String(Number(l.seq)) : '0';
+        const skewNum = Number(l.skew);
+        const skew = Number.isFinite(skewNum)
+          ? `<span class="skew" title="Log time is outside the span">${skewNum} span</span>`
+          : '';
         return (
-          `<div class="sd-log" data-seq="${l.seq}">` +
+          `<div class="sd-log" data-seq="${seq}">` +
           `<span class="sev sev-${sev}">${esc(sevLabel(l))}</span> ` +
           `<span class="muted">${esc(fmtOffset(l.offsetMs - baseOffset))}</span> ${skew}` +
-          `<button type="button" class="link sd-open" data-action="openLog" data-seq="${l.seq}" data-inst="${esc(l.instanceId)}">Open in Logs</button>` +
+          `<button type="button" class="link sd-open" data-action="openLog" data-seq="${seq}" data-inst="${esc(l.instanceId)}">Open in Logs</button>` +
           `<div class="sd-msg">${esc(l.message)}</div></div>`
         );
       })
