@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { decodeMetrics, decodeTraces, toHexId } from '../../src/store/decode';
+import { decodeLogs, decodeMetrics, decodeTraces, toHexId } from '../../src/store/decode';
 
 describe('decode', () => {
   it('toHexId handles base64 and hex and empty', () => {
@@ -47,6 +47,85 @@ describe('decode', () => {
     assert.strictEqual(span.statusMessage, 'boom');
     assert.strictEqual(span.durationMs, 2.5);
     assert.strictEqual(span.attrs['http.method'], 'GET');
+    assert.deepStrictEqual(span.links, []);
+    assert.strictEqual(span.codeLocation, undefined);
+  });
+
+  const TRACE = '0af7651916cd43dd8448eb211c80319c';
+  const SPAN = 'b7ad6b7169203331';
+  const kv = (key: string, v: string | number) => ({
+    key,
+    value: typeof v === 'string' ? { stringValue: v } : { intValue: v },
+  });
+  const traces = (span: Record<string, unknown>) => ({
+    resourceSpans: [{ resource: { attributes: [] }, scopeSpans: [{ spans: [span] }] }],
+  });
+
+  it('decodeTraces decodes links in hex and base64 and drops malformed ones', () => {
+    const [batch] = decodeTraces(
+      traces({
+        traceId: TRACE,
+        spanId: SPAN,
+        links: [
+          { traceId: TRACE.toUpperCase(), spanId: SPAN, traceState: 'k=v', attributes: [kv('a', 'b')] },
+          {
+            traceId: Buffer.from(TRACE, 'hex').toString('base64'),
+            spanId: Buffer.from(SPAN, 'hex').toString('base64'),
+            traceState: '',
+          },
+          { traceId: TRACE },
+          { traceId: '0'.repeat(32), spanId: SPAN },
+          null,
+        ],
+      })
+    );
+    const [link1, link2, ...rest] = batch.spans[0].links;
+    assert.deepStrictEqual(link1, { traceId: TRACE, spanId: SPAN, traceState: 'k=v', attrs: { a: 'b' } });
+    assert.deepStrictEqual(link2, { traceId: TRACE, spanId: SPAN, attrs: {} });
+    assert.strictEqual(rest.length, 0);
+  });
+
+  it('decodeTraces reads span code location from old and new semconv keys', () => {
+    const [oldKeys] = decodeTraces(
+      traces({
+        traceId: TRACE,
+        spanId: SPAN,
+        attributes: [kv('code.filepath', 'src/a.ts'), kv('code.lineno', 12), kv('code.function', 'f')],
+      })
+    );
+    assert.deepStrictEqual(oldKeys.spans[0].codeLocation, {
+      filepath: 'src/a.ts',
+      line: 12,
+      column: undefined,
+      function: 'f',
+    });
+    const [newKeys] = decodeTraces(
+      traces({
+        traceId: TRACE,
+        spanId: SPAN,
+        attributes: [kv('code.file.path', 'b.py'), kv('code.line.number', 3), kv('code.function.name', 'g')],
+      })
+    );
+    assert.strictEqual(newKeys.spans[0].codeLocation?.filepath, 'b.py');
+    assert.strictEqual(newKeys.spans[0].codeLocation?.line, 3);
+  });
+
+  it('decodeTraces treats an all-zero parent as no parent', () => {
+    const [batch] = decodeTraces(traces({ traceId: TRACE, spanId: SPAN, parentSpanId: '0'.repeat(16) }));
+    assert.strictEqual(batch.spans[0].parentSpanId, undefined);
+  });
+
+  it('decodeLogs drops all-zero trace and span ids', () => {
+    const logs = (traceId: string, spanId: string) =>
+      decodeLogs({
+        resourceLogs: [{ resource: { attributes: [] }, scopeLogs: [{ logRecords: [{ traceId, spanId }] }] }],
+      })[0].logs[0];
+    const zero = logs('0'.repeat(32), '0'.repeat(16));
+    assert.strictEqual(zero.traceId, undefined);
+    assert.strictEqual(zero.spanId, undefined);
+    const real = logs(TRACE.toUpperCase(), SPAN);
+    assert.strictEqual(real.traceId, TRACE);
+    assert.strictEqual(real.spanId, SPAN);
   });
 
   it('decodeMetrics handles gauge and histogram', () => {

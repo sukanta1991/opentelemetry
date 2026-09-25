@@ -64,6 +64,13 @@ export interface SpanEvent {
   attrs: KeyValueMap;
 }
 
+export interface SpanLink {
+  traceId: string;
+  spanId: string;
+  traceState?: string;
+  attrs: KeyValueMap;
+}
+
 export interface Span {
   traceId: string;
   spanId: string;
@@ -77,7 +84,9 @@ export interface Span {
   statusMessage?: string;
   attrs: KeyValueMap;
   events: SpanEvent[];
+  links: SpanLink[];
   scope?: string;
+  codeLocation?: CodeLocation;
 }
 
 export interface MetricQuantile {

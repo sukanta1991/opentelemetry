@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { TelemetryStore } from '../../src/store/store';
-import { Metric, ResourceMetrics } from '../../src/store/model';
+import { LogRecord, Metric, ResourceMetrics, Span } from '../../src/store/model';
 
 function batch(metrics: Metric[]): ResourceMetrics[] {
   return [{ resource: { serviceName: 'svc', serviceInstanceId: 'i1', attrs: {} }, metrics }];
@@ -169,5 +169,138 @@ describe('store metric series', () => {
     store.ingestMetrics(batch([gauge('cpu', 1000, 10)]));
     assert.deepStrictEqual(store.getMetricSeries('does::not-exist', 'cpu'), []);
     assert.deepStrictEqual(store.getMetricSeries(instanceId, 'unknown-metric'), []);
+  });
+});
+
+describe('store trace ↔ log correlation', () => {
+  const T1 = 'a'.repeat(32);
+  const T2 = 'b'.repeat(32);
+  const resource = (svc: string) => ({ serviceName: svc, serviceInstanceId: 'i1', attrs: {} });
+
+  function span(spanId: string, startMs: number, parentSpanId?: string, traceId = T1): Span {
+    return {
+      traceId,
+      spanId,
+      parentSpanId,
+      name: spanId,
+      kind: 'INTERNAL',
+      startMs,
+      endMs: startMs + 10,
+      durationMs: 10,
+      statusCode: 'UNSET',
+      attrs: {},
+      events: [],
+      links: [],
+    };
+  }
+
+  function log(timeMs: number, traceId?: string, spanId?: string): LogRecord {
+    return { timeMs, severityNumber: 9, severityText: 'INFO', body: `m${timeMs}`, attrs: {}, traceId, spanId };
+  }
+
+  function seeded(): TelemetryStore {
+    const store = new TelemetryStore();
+    store.ingestSpans([{ resource: resource('front'), spans: [span('1111111111111111', 100)] }]);
+    store.ingestSpans([
+      { resource: resource('back'), spans: [span('2222222222222222', 110, '1111111111111111')] },
+    ]);
+    store.ingestLogs([
+      { resource: resource('front'), logs: [log(105, T1, '1111111111111111'), log(1, T2), log(2)] },
+    ]);
+    store.ingestLogs([
+      { resource: resource('back'), logs: [log(115, T1, '2222222222222222'), log(101, T1)] },
+    ]);
+    return store;
+  }
+
+  it('tags spans with their instance', () => {
+    const tagged = seeded().getSpansForTrace(T1);
+    assert.deepStrictEqual(
+      tagged.map((t) => [t.span.spanId, t.serviceName, t.instanceId]),
+      [
+        ['1111111111111111', 'front', 'front::i1'],
+        ['2222222222222222', 'back', 'back::i1'],
+      ]
+    );
+  });
+
+  it('finds every instance holding a trace', () => {
+    const store = seeded();
+    assert.deepStrictEqual(store.findTraceInstances(T1), ['front::i1', 'back::i1']);
+    assert.deepStrictEqual(store.findTraceInstances(T2), []);
+  });
+
+  it('collects logs for a trace across instances, oldest first', () => {
+    const { items, truncated } = seeded().getLogsForTrace(T1);
+    assert.strictEqual(truncated, false);
+    assert.deepStrictEqual(
+      items.map((i) => [i.instanceId, i.log.timeMs]),
+      [
+        ['back::i1', 101],
+        ['front::i1', 105],
+        ['back::i1', 115],
+      ]
+    );
+  });
+
+  it('filters logs by span', () => {
+    const { items } = seeded().getLogsForTrace(T1, { spanId: '2222222222222222' });
+    assert.deepStrictEqual(
+      items.map((i) => i.log.timeMs),
+      [115]
+    );
+  });
+
+  it('caps logs to the newest and flags truncation', () => {
+    const { items, truncated } = seeded().getLogsForTrace(T1, { limit: 2 });
+    assert.strictEqual(truncated, true);
+    assert.deepStrictEqual(
+      items.map((i) => i.log.timeMs),
+      [105, 115]
+    );
+  });
+
+  it('counts correlated logs per instance and per trace', () => {
+    const store = seeded();
+    assert.deepStrictEqual([...store.countLogsByInstance(T1)], [
+      ['front::i1', 1],
+      ['back::i1', 2],
+    ]);
+    assert.deepStrictEqual([...store.countLogsByInstance(T1, '1111111111111111')], [['front::i1', 1]]);
+    const byTrace = store.countLogsByTrace();
+    assert.strictEqual(byTrace.get(T1), 3);
+    assert.strictEqual(byTrace.get(T2), 1);
+    assert.strictEqual(byTrace.size, 2);
+  });
+
+  it('picks the earliest parentless span as root regardless of arrival order', () => {
+    const store = new TelemetryStore();
+    store.ingestSpans([
+      {
+        resource: resource('svc'),
+        spans: [span('3333333333333333', 50), span('4444444444444444', 10), span('5555555555555555', 30)],
+      },
+    ]);
+    const trace = store.getInstance('svc::i1')!.traces.get(T1)!;
+    assert.strictEqual(trace.rootSpanId, '4444444444444444');
+  });
+});
+
+describe('store application ordering', () => {
+  const logsFor = (serviceInstanceId: string) => [
+    {
+      resource: { serviceName: 'svc', serviceInstanceId, attrs: {} },
+      logs: [{ timeMs: 1, severityNumber: 9, severityText: 'INFO', body: 'x', attrs: {} } as LogRecord],
+    },
+  ];
+
+  it('orders instances by name, not by most recent activity', () => {
+    const store = new TelemetryStore();
+    store.ingestLogs(logsFor('b'));
+    store.ingestLogs(logsFor('a'));
+    const order = () => store.getApplications()[0].instances.map((i) => i.serviceInstanceId);
+    assert.deepStrictEqual(order(), ['a', 'b']);
+    store.ingestLogs(logsFor('b'));
+    assert.deepStrictEqual(order(), ['a', 'b']);
   });
 });

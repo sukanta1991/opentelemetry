@@ -73,6 +73,11 @@ let anchorSeq = -1;
 // True once the host reports that the ring buffer has dropped records.
 let evicted = false;
 
+// Transient trace/span filter set by "View logs" from the traces panel; never persisted.
+let correlate: { traceId: string; spanId?: string } | null = null;
+const TRACE_ID = /^[0-9a-f]{32}$/;
+const SPAN_ID = /^[0-9a-f]{16}$/;
+
 // While paused the view is frozen and incoming records queue here instead.
 let paused = false;
 let pending: WireLog[] = [];
@@ -120,6 +125,10 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
+const corrChip = byId<HTMLSpanElement>('corrChip');
+const corrLabel = byId<HTMLSpanElement>('corrLabel');
+const corrClear = byId<HTMLButtonElement>('corrClear');
+const viewTraceBtn = byId<HTMLButtonElement>('viewTrace');
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -219,6 +228,15 @@ function cellHtml(l: WireLog, id: LogColumnId): string {
       );
     case 'attributes':
       return `<td class="attrs"><div class="clamp">${text}</div></td>`;
+    case 'traceId':
+    case 'spanId': {
+      if (!text) return '<td class="plain"></td>';
+      const scope = id === 'spanId' ? 'span' : 'trace';
+      return (
+        `<td class="plain"><button type="button" class="link" data-view-trace="${scope}" ` +
+        `title="View trace">${text}</button></td>`
+      );
+    }
     default:
       return `<td class="plain">${text}</td>`;
   }
@@ -377,6 +395,8 @@ function apply(preserveScroll = true): void {
     level: state.level,
     attrFilter: state.attrFilter,
     range: state.range,
+    traceId: correlate?.traceId,
+    spanId: correlate?.spanId,
   };
   filtered = sortLogs(filterLogs(logs, f, searchRow, newest), state.sort);
 
@@ -390,7 +410,7 @@ function apply(preserveScroll = true): void {
 }
 
 function updateRetentionHint(): void {
-  const short = needsMoreRetention(logs, state.range, evicted);
+  const short = !correlate && needsMoreRetention(logs, state.range, evicted);
   retentionHint.hidden = !short;
   if (!short) return;
   const oldest = new Date(oldestTime(logs)).toLocaleTimeString();
@@ -737,6 +757,7 @@ function refreshSelectionUi(): void {
     selAll.checked = n > 0 && n === filtered.length;
     selAll.indeterminate = n > 0 && n < filtered.length;
   }
+  viewTraceBtn.disabled = !bySeq.get(focusedSeq)?.traceId;
   updateCount();
 }
 
@@ -761,6 +782,14 @@ tbody.addEventListener('click', (e) => {
   const raw = target.closest('tr')?.dataset.seq;
   if (!raw) return;
   const seq = Number(raw);
+
+  const traceLink = target.closest<HTMLElement>('[data-view-trace]');
+  if (traceLink) {
+    focusedSeq = seq;
+    refreshSelectionUi();
+    vscode.postMessage({ type: 'viewTrace', seq, scope: traceLink.dataset.viewTrace });
+    return;
+  }
 
   if (target.matches('input[data-sel]')) {
     if (selection.has(seq)) selection.delete(seq);
@@ -865,6 +894,42 @@ byId<HTMLButtonElement>('nav').addEventListener('click', () => {
 });
 byId<HTMLButtonElement>('open').addEventListener('click', () => {
   if (focusedSeq >= 0) vscode.postMessage({ type: 'openInEditor', seq: focusedSeq });
+});
+viewTraceBtn.addEventListener('click', () => {
+  const l = bySeq.get(focusedSeq);
+  if (l?.traceId) vscode.postMessage({ type: 'viewTrace', seq: l.seq, scope: l.spanId ? 'span' : 'trace' });
+});
+
+// --- Trace correlation ------------------------------------------------------------------
+
+function setCorrelation(next: { traceId: string; spanId?: string } | null, focusSeq?: number): void {
+  correlate = next;
+  corrChip.hidden = !next;
+  range.disabled = !!next;
+  range.title = next ? 'Time range is ignored while filtering by trace' : '';
+  if (next) {
+    const t = next.traceId;
+    corrLabel.textContent =
+      `Trace ${t.slice(0, 8)}…${t.slice(-4)}` + (next.spanId ? ` · Span ${next.spanId.slice(0, 8)}` : '');
+  }
+  rowsEl.scrollTop = 0;
+  apply(false);
+  if (next && filtered.length) {
+    const target = focusSeq !== undefined && indexBySeq.has(focusSeq) ? focusSeq : filtered[0].seq;
+    selection.clear();
+    selection.add(target);
+    focusedSeq = anchorSeq = target;
+    rowsEl.scrollTop = offsets[indexBySeq.get(target) ?? 0];
+    paint();
+    refreshSelectionUi();
+  }
+}
+
+corrClear.addEventListener('click', () => setCorrelation(null));
+corrChip.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  e.stopPropagation();
+  setCorrelation(null);
 });
 
 pauseBtn.addEventListener('click', () => {
@@ -1057,7 +1122,16 @@ window.addEventListener('message', (e: MessageEvent) => {
     oldestSeq?: number;
     readOnly?: boolean;
     source?: string;
+    traceId?: unknown;
+    spanId?: unknown;
+    focusSeq?: unknown;
   };
+  if (m?.type === 'correlate') {
+    if (typeof m.traceId !== 'string' || !TRACE_ID.test(m.traceId)) return;
+    const spanId = typeof m.spanId === 'string' && SPAN_ID.test(m.spanId) ? m.spanId : undefined;
+    setCorrelation({ traceId: m.traceId, spanId }, Number.isInteger(m.focusSeq) ? (m.focusSeq as number) : undefined);
+    return;
+  }
   if (m?.type === 'mode') {
     // Imported instances never stream, so pausing is meaningless.
     pauseBtn.hidden = m.readOnly === true;

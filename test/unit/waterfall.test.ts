@@ -2,9 +2,7 @@ import * as assert from 'assert';
 import { Span } from '../../src/store/model';
 import {
   buildWaterfall,
-  parseAttrFilter,
   toAttrEntries,
-  traceMatchesAttrFilter,
 } from '../../src/views/waterfall';
 
 function span(p: Partial<Span> & { spanId: string; startMs: number }): Span {
@@ -17,6 +15,7 @@ function span(p: Partial<Span> & { spanId: string; startMs: number }): Span {
     statusCode: 'UNSET',
     attrs: {},
     events: [],
+    links: [],
     ...p,
   };
 }
@@ -94,6 +93,75 @@ describe('buildWaterfall', () => {
   it('returns no rows for an empty trace', () => {
     assert.deepStrictEqual(buildWaterfall([]), []);
   });
+
+  it('shows spans in a parent cycle instead of dropping them', () => {
+    const rows = buildWaterfall(
+      tag([
+        span({ spanId: 'root', startMs: 0 }),
+        span({ spanId: 'x', parentSpanId: 'y', startMs: 10 }),
+        span({ spanId: 'y', parentSpanId: 'x', startMs: 5 }),
+        span({ spanId: 'self', parentSpanId: 'self', startMs: 20 }),
+      ])
+    );
+    assert.deepStrictEqual(
+      rows.map((r) => [r.spanId, r.depth, r.orphan]),
+      [
+        ['root', 0, false],
+        ['y', 0, true],
+        ['x', 1, false],
+        ['self', 0, true],
+      ]
+    );
+  });
+
+  it('flags a missing parent as orphan', () => {
+    const rows = buildWaterfall(tag([span({ spanId: 'o', parentSpanId: 'gone', startMs: 0 })]));
+    assert.strictEqual(rows[0].orphan, true);
+  });
+
+  it('collapses duplicate span ids to the latest-ending copy', () => {
+    const rows = buildWaterfall(
+      tag([span({ spanId: 'd', startMs: 0, endMs: 5, name: 'partial' }), span({ spanId: 'd', startMs: 0, endMs: 9, name: 'full' })])
+    );
+    assert.deepStrictEqual(
+      rows.map((r) => r.name),
+      ['full']
+    );
+  });
+
+  it('handles very deep traces without recursion', () => {
+    const chain = Array.from({ length: 20000 }, (_, i) =>
+      span({ spanId: `s${i}`, parentSpanId: i ? `s${i - 1}` : undefined, startMs: i })
+    );
+    const rows = buildWaterfall(tag(chain));
+    assert.strictEqual(rows.length, 20000);
+    assert.strictEqual(rows[19999].depth, 19999);
+  });
+
+  it('passes through instance, links and code location', () => {
+    const [row] = buildWaterfall(
+      [
+        {
+          serviceName: 'api',
+          instanceId: 'api::1',
+          span: span({
+            spanId: 's',
+            startMs: 0,
+            links: [{ traceId: 'T2', spanId: 'S2', traceState: 'k=v', attrs: { a: 1 } }, { traceId: 'T3', spanId: 'S3', attrs: {} }],
+            codeLocation: { filepath: 'src/a.ts', line: 3, function: 'f' },
+          }),
+        },
+      ],
+      { linkAvailable: (t) => t === 'T2' }
+    );
+    assert.strictEqual(row.instanceId, 'api::1');
+    assert.deepStrictEqual(row.links, [
+      { traceId: 'T2', spanId: 'S2', traceState: 'k=v', attrs: [{ key: 'a', value: '1', structured: false }], available: true },
+      { traceId: 'T3', spanId: 'S3', traceState: undefined, attrs: [], available: false },
+    ]);
+    assert.deepStrictEqual(row.code, { filepath: 'src/a.ts', line: 3, function: 'f' });
+    assert.strictEqual(row.logCount, 0);
+  });
 });
 
 describe('toAttrEntries', () => {
@@ -120,48 +188,5 @@ describe('toAttrEntries', () => {
         { key: 'z.str', value: 'hello', structured: false },
       ]
     );
-  });
-});
-
-describe('parseAttrFilter', () => {
-  it('returns undefined for blank or keyless input', () => {
-    assert.strictEqual(parseAttrFilter(''), undefined);
-    assert.strictEqual(parseAttrFilter('   '), undefined);
-    assert.strictEqual(parseAttrFilter('=v'), undefined);
-  });
-
-  it('parses presence and key=value filters', () => {
-    assert.deepStrictEqual(parseAttrFilter('gen_ai.system'), { key: 'gen_ai.system' });
-    assert.deepStrictEqual(parseAttrFilter('k='), { key: 'k' });
-    assert.deepStrictEqual(parseAttrFilter(' k = Val '), { key: 'k', value: 'val' });
-    assert.deepStrictEqual(parseAttrFilter('url=a=b'), { key: 'url', value: 'a=b' });
-  });
-});
-
-describe('traceMatchesAttrFilter', () => {
-  const spans = [
-    span({ spanId: 'a', startMs: 0, attrs: { 'gen_ai.system': 'OpenAI', tokens: 42 } }),
-    span({ spanId: 'b', startMs: 1, attrs: { tags: ['Alpha', 'beta'], flag: null } }),
-  ];
-  const match = (text: string) => traceMatchesAttrFilter(spans, parseAttrFilter(text)!);
-
-  it('matches on attribute presence in any span', () => {
-    assert.strictEqual(match('gen_ai.system'), true);
-    assert.strictEqual(match('tags'), true);
-    assert.strictEqual(match('flag'), true);
-    assert.strictEqual(match('missing'), false);
-  });
-
-  it('matches value substrings case-insensitively', () => {
-    assert.strictEqual(match('gen_ai.system=openai'), true);
-    assert.strictEqual(match('gen_ai.system=AI'), true);
-    assert.strictEqual(match('gen_ai.system=anthropic'), false);
-    assert.strictEqual(match('tokens=42'), true);
-    assert.strictEqual(match('tags=alpha'), true);
-  });
-
-  it('matches keys exactly', () => {
-    assert.strictEqual(match('GEN_AI.SYSTEM'), false);
-    assert.strictEqual(match('gen_ai'), false);
   });
 });

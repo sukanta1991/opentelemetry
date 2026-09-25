@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-25
+
+### Added
+
+- **Trace ↔ log correlation.** Logs gain a **View Trace** button, and their Trace ID / Span ID cells are clickable. Either opens the trace's waterfall with the log's span selected. From a trace or span, **View logs** opens Logs filtered to it: a clearable chip shows the filter, and the time range is ignored while it is active. When a trace's logs come from several instances, a picker shows the count per instance.
+- **Logs in the waterfall.** Each span's correlated logs are drawn as severity-coloured markers on its bar. Nearby markers are grouped. Logs outside the span's time are pinned to its edge and flagged. Logs with the trace ID but no matching span appear in a trace-level strip. A **Show logs** toggle is remembered.
+- **Span details pane.** Adds **links** (open a collected linked trace, then **Back**), the span's logs with **Open in Logs** (jumps to that row), the collapsible **resource**, exception stack traces in a scrollable block, **Copy span ID**, and **Navigate To Code** for spans with `code.*` attributes. Span links and code locations are now decoded from OTLP.
+- **Traces panel rebuilt.**
+  - The trace list is virtualized and can be sorted by any column (start, duration, spans, errors, logs…).
+  - Columns can be resized and reordered, and root-span attributes can be added as columns.
+  - Filters for service, span name, status, kind, attributes (several, AND'd), min/max duration and trace ID; the time-range picker from Logs; and an advanced **query bar**, e.g. `service=checkout status=error dur>200ms http.status_code>=500`.
+  - Span conditions must match the same span. Traces from several services are shown as one entry, with root, services and counts combined.
+  - The open waterfall refreshes live.
+- **OpenTelemetry: Find Trace by ID** opens a trace from a trace ID or a W3C `traceparent`.
+- `test/scripts/push-correlated.ts` sends linked traces and logs (plus a `--bulk` mode) for trying these features without an instrumented app.
+
+### Changed
+
+- The traces list refreshes at most twice a second, and hidden Traces panels stop updating until shown.
+- Navigate To Code prefers the closest path match. When several files match equally, you pick one.
+
+### Fixed
+
+- Traces: spans whose parents form a cycle, or that point to themselves, were silently missing from the waterfall; they are now shown and flagged. Very deep traces no longer risk a stack overflow. Duplicate copies of a span collapse into one.
+- Traces: the root span is now the earliest span with no parent, whatever order spans arrive in; it is no longer simply the last one received.
+- Trace and span IDs are normalized (lowercase hex; `0x` prefixes and dashes stripped) for received and imported data, so logs and traces match reliably. All-zero IDs are treated as "no trace context".
+
+### Security
+
+- Navigate To Code resolves paths only inside workspace folders and refuses non-file URIs. It escapes glob characters in the fallback search. It asks for confirmation before opening an absolute path outside the workspace, because telemetry can come from any process.
+- Webview messages are validated on the extension side. Actions such as View Trace, View logs, Open in Logs, following a link and Copy only work on IDs the extension already holds for the current view.
+- Webview nonces now come from `crypto.randomBytes`.
+
 ## [0.3.2] - 2026-09-24
 
 ### Added

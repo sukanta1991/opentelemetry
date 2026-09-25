@@ -10,7 +10,7 @@ extra containers. Point any OTLP-compatible SDK at the receiver and your telemet
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.3.2-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.4.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -64,32 +64,21 @@ Service map — services, databases, queues, and external dependencies inferred 
     attributes, a record count, and whether to export the filtered, all, or selected rows.
   - **Import** OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or previously exported plain JSON as a read-only instance under the **Imported** node, kept separate from live telemetry.
   - **Navigate To Code** to jump to the source line, and **Open In Editor** to view a log as JSON.
-- **Traces & spans** — filter by duration, trace ID, errors, or span attribute (`key` or `key=value`), and **Examine** any trace as a span waterfall. Click a span to see its attributes, events, status, and IDs in a details pane. Distributed spans are merged by trace ID.
-- **Metrics** — per-instance gauges, counters/sums, and histograms with a **Table | Graph**
-  toggle. The Graph view plots time-series history built up as telemetry streams in:
+  - **View Trace** (or click a Trace ID / Span ID cell) opens the log's trace waterfall with its span selected. Arriving from a trace filters Logs to that trace or span — shown as a chip you can clear — and ignores the time range so older correlated logs stay visible.
+- **Traces & spans** — a virtualized, sortable trace list with a column picker (including root-span attributes as columns) and the same time-range picker as Logs:
+  - **Filters** for service, span name, status, kind, span attributes (`key` / `key=value`), min/max duration and trace ID, plus an **advanced query bar** (see [Trace query syntax](#trace-query-syntax)). Span conditions must all hold on the **same span**.
+  - The **waterfall** merges distributed spans from every instance by trace ID and shows each span's **logs as markers** on its bar (coloured by severity, grouped when dense; logs outside the span's time are pinned to its edge and flagged). Logs with the trace ID but no known span appear in a trace-level strip. Large traces are virtualized.
+  - The **span details** pane shows status, IDs, attributes, events (including exception stack traces), **links** (open a linked trace, then **Back**), the span's **logs** (each with **Open in Logs**), and the **resource**. **View logs** opens Logs filtered to the span, and **Navigate To Code** appears when the span has `code.*` attributes.
+  - The open waterfall refreshes live as spans and logs arrive.
+- **Metrics** — per-instance gauges, counters/sums, and histograms with a **Table | Graph** toggle. The Graph view plots time-series history built up as telemetry streams in:
   - **Gauges & sums** → multi-series line charts (one line per attribute set), on a shared time axis.
   - **Summaries** → a line per quantile.
   - **Histograms** → bar charts of the latest bucket distribution.
-  - A **per-graph chart-type dropdown** offers views scoped to each metric's OTEL type —
-    counters and updown-counters add **rate**, **stacked-area**, **area**, and **bar** (for
-    updown-counters `rate` keeps real increases and decreases); gauges add a single-value
-    **gauge** readout; summaries add a **percentile** view; every type offers **table**. The
-    selection is remembered per metric across panel reopens.
-  - An **Over time** dropdown aggregates each series into fixed-width time buckets
-    (avg / min / max / sum / last / count / std-dev / P50 / P90 / P95 / P99), reshaping the
-    plotted line rather than adding a readout; **Raw** plots every sample. Multi-series scalar
-    metrics also get a **Series** dropdown (sum / avg / min / max / P95 across label sets).
-  - A **time-range picker** in the toolbar (1 min … 2 hour) applies to every graph at once and
-    pins the x-axis to the selected window, alongside a **Step** control for the aggregation
-    bucket width. **Auto** follows the range; pick a coarser step to gather several samples per
-    bucket. The width actually used is shown beside the Over time dropdown. A hint appears when
-    the retained history is shorter than the chosen range.
-  - ⚠️ The aggregation, time-range and step controls are **experimental** while we gather
-    feedback — their defaults and behaviour may change. Please report anything surprising at
-    [github.com/sukanta1991/opentelemetry/issues](https://github.com/sukanta1991/opentelemetry/issues).
-  - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and
-    truncate long series labels with a full-text tooltip on hover. History depth is bounded by
-    `otel.retention.maxMetricPointsPerSeries`.
+  - A **per-graph chart-type dropdown** offers views scoped to each metric's OTEL type — counters and updown-counters add **rate**, **stacked-area**, **area**, and **bar** (for updown-counters `rate` keeps real increases and decreases); gauges add a single-value **gauge** readout; summaries add a **percentile** view; every type offers **table**. The selection is remembered per metric across panel reopens.
+  - An **Over time** dropdown aggregates each series into fixed-width time buckets (avg / min / max / sum / last / count / std-dev / P50 / P90 / P95 / P99), reshaping the plotted line rather than adding a readout; **Raw** plots every sample. Multi-series scalar metrics also get a **Series** dropdown (sum / avg / min / max / P95 across label sets).
+  - A **time-range picker** in the toolbar (1 min … 2 hour) applies to every graph at once and pins the x-axis to the selected window, alongside a **Step** control for the aggregation bucket width. **Auto** follows the range; pick a coarser step to gather several samples per bucket. The width actually used is shown beside the Over time dropdown. A hint appears when the retained history is shorter than the chosen range.
+  - ⚠️ The aggregation, time-range and step controls are **experimental** while we gather feedback — their defaults and behaviour may change. Please report anything surprising at [github.com/sukanta1991/opentelemetry/issues](https://github.com/sukanta1991/opentelemetry/issues).
+  - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and truncate long series labels with a full-text tooltip on hover. History depth is bounded by `otel.retention.maxMetricPointsPerSeries`.
 - **Service map** — services, databases, queues, and external dependencies inferred from spans.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
 
@@ -134,9 +123,11 @@ OTLP exporter target.
 **Debug a failing request**
 
 1. Start your app and generate some traffic.
-2. Open **Traces**, tick **errors only**, and select the failed trace.
-3. Click **Examine** to open the span waterfall, find the slow or failing span, and click it to inspect its attributes and events.
-4. Open **Logs**, filter by text or level, and use **Navigate To Code** to jump to the source.
+2. Open **Traces** and set **status** to *Error* (or type `status=error dur>200ms` in the query bar).
+3. Select the failed trace to open its waterfall. Log markers on the bars show where logs were written; click one, or a span, to see its attributes, events, links and logs in the details pane.
+4. Click **View logs** to open Logs filtered to that span (or **View logs for trace** for the whole request), then **Navigate To Code** to jump to the source.
+
+Going the other way works too: select a log and click **View Trace** (or click its Trace ID) to open the waterfall with the log's span selected. **OpenTelemetry: Find Trace by ID** accepts a trace ID or a W3C `traceparent` pasted from your terminal.
 
 **Share a log sample with a teammate**
 
@@ -160,6 +151,27 @@ OTLP exporter target.
 1. Generate distributed traffic (HTTP calls, database queries, queue messages).
 2. Open the **Service Map** to see services, databases, and queues and how they connect.
 
+## Trace query syntax
+
+The Traces query bar combines with the toolbar filters; every term must match. Terms are separated by spaces (or commas); quote values containing spaces, e.g. `name="GET /api"`.
+
+| Term | Matches |
+| --- | --- |
+| `service=checkout`, `service!=checkout` | Span's service (case-insensitive) |
+| `name:users`, `name="SELECT users"`, `name!=…` | Span name contains / equals |
+| `status=error` / `ok` / `unset` | Span status |
+| `kind=server` / `client` / `internal` / `producer` / `consumer` | Span kind |
+| `http.route=/api`, `key:value` | Attribute contains the text (case-insensitive) |
+| `key!=value` | Attribute does not contain the text (spans without it also match) |
+| `http.status_code>=500`, `>`, `<`, `<=` | Numeric attribute comparison |
+| `has:key` or a dotted `db.system` | Attribute is present |
+| `-key` | Attribute is absent |
+| `dur>200ms`, `dur<1.5s` (`us`, `ms`, `s`, `m`, `h`) | Trace duration |
+| `trace:4bf92f` | Trace ID contains |
+| any other word, or `"a phrase"` | A span name or the trace ID contains it |
+
+**Span terms must all hold on the same span**: `service=checkout status=error` finds traces where a checkout span failed, not traces where checkout ran and something else failed. Queries are limited to 1000 characters and 20 terms; unrecognised terms are listed and ignored.
+
 ## Commands
 
 | Command | Description |
@@ -174,6 +186,7 @@ OTLP exporter target.
 | `OpenTelemetry: Export Logs` | Export logs as OTLP/JSON, plain JSON, or CSV. |
 | `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or exported plain JSON file as a read-only instance. |
 | `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
+| `OpenTelemetry: Find Trace by ID` | Open a trace's waterfall from a trace ID or W3C `traceparent`. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove
 Instance** action.
@@ -232,9 +245,13 @@ assigned ports. You can also set `otel.port.mode` to `random`, or change `otel.p
 
 ### "Navigate To Code" doesn't jump anywhere
 
-Navigate To Code applies to **log entries** and requires source-location attributes
-(`code.filepath` / `code.lineno`) on the log record. If those attributes aren't present, the
-action is unavailable. It also can't navigate to third-party or decompiled code.
+Navigate To Code applies to **log entries** and **spans** and requires source-location attributes (`code.filepath` / `code.lineno`, or the newer `code.file.path` / `code.line.number`). If those attributes aren't present, the action is unavailable. It also can't navigate to third-party or decompiled code.
+
+Paths are resolved inside your workspace folders; when only a file name matches, the closest path wins (or you pick from a list). Because telemetry can come from any process, an absolute path **outside** the workspace asks for confirmation before it is opened.
+
+### "Trace is not in collected data"
+
+**View Trace** and **Find Trace by ID** can only open traces the receiver has received and still retains. The trace may not have been exported (sampling, a missing exporter), may have been evicted by `otel.retention.maxTracesPerInstance`, or the log may come from an imported file.
 
 ### My collected data disappeared
 
@@ -254,7 +271,6 @@ Planned and under exploration — feedback welcome via
 [issues](https://github.com/sukanta1991/opentelemetry/issues):
 
 - Trace and metric export (logs can already be exported and imported)
-- Richer search and filtering for traces
 - Deeper service-map analytics (latency, error rates, throughput)
 ## Contributing
 
@@ -273,6 +289,8 @@ npm run lint      # eslint
 npm test          # unit + smoke + activation tests
 npm run package   # produce a .vsix
 ```
+
+To try trace ↔ log correlation without an instrumented app, start the receiver and run `npx ts-node test/scripts/push-correlated.ts` (add `--bulk` for 2000 traces × 50 spans).
 
 Press **F5** to launch the Extension Development Host.
   

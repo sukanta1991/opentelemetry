@@ -1,28 +1,80 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { formatDuration } from './format';
-import { AttrFilter, buildWaterfall, parseAttrFilter, traceMatchesAttrFilter } from './waterfall';
-import { getNonce, htmlShell } from './webviewUtil';
+import { KeyValueMap } from '../store/model';
+import { TaggedSpan, TracePart } from '../store/store';
+import { openCodeLocation } from './codeNav';
+import { isEmptyQuery, matchesTrace, parseTraceQuery } from './traceQuery';
+import { TraceSummary, TraceSummaryCache, collectRootAttrKeys, rootAttrValue, traceSignature } from './traceSummary';
+import { MAX_WATERFALL_LOGS, buildWaterfallPayload } from './waterfallPayload';
+import { windowBounds } from './webview/timeRange';
+import {
+  TraceQueryInput,
+  TraceRow,
+  defaultQueryInput,
+  sanitizeAttrKeys,
+  sanitizeQueryInput,
+} from './webview/traceView';
+import { COLUMN_TABLE_CSS, RANGE_ICON_SVG, getNonce, getUri, htmlShell } from './webviewUtil';
+
+export interface TraceFocus {
+  traceId: string;
+  spanId?: string;
+}
+
+const TRACE_ID = /^[0-9a-f]{32}$/;
+const SPAN_ID = /^[0-9a-f]{16}$/;
+const LIST_THROTTLE_MS = 500;
+
+// What the open waterfall shows; webview requests are only honoured against this.
+interface CurrentTrace {
+  traceId: string;
+  spans: Map<string, TaggedSpan>;
+  links: Set<string>;
+  sig: string;
+}
+
+function* taggedSpans(parts: readonly TracePart[]): Iterable<TaggedSpan> {
+  for (const p of parts) {
+    for (const span of p.trace.spans.values()) {
+      yield { span, serviceName: p.serviceName, instanceId: p.instanceId };
+    }
+  }
+}
 
 export class TracesPanel {
   private static panels = new Map<string, TracesPanel>();
   private disposables: vscode.Disposable[] = [];
-  private attrFilter: AttrFilter | undefined;
+  private ready = false;
+  private pendingFocus: TraceFocus | undefined;
+  private input: TraceQueryInput = defaultQueryInput();
+  private attrKeys: string[] = [];
+  private withLogs = false;
+  private readonly cache = new TraceSummaryCache();
+  private lastPost = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private dirty = false;
+  private current: CurrentTrace | undefined;
 
-  static show(controller: OtelController, instanceId: string): void {
-    const existing = TracesPanel.panels.get(instanceId);
-    if (existing) {
-      existing.panel.reveal(vscode.ViewColumn.Active);
-      return;
+  static show(controller: OtelController, instanceId: string, focus?: TraceFocus): void {
+    let target = TracesPanel.panels.get(instanceId);
+    if (target) {
+      target.panel.reveal(vscode.ViewColumn.Active);
+    } else {
+      const inst = controller.store.getInstance(instanceId);
+      const panel = vscode.window.createWebviewPanel(
+        'otel.traces',
+        inst ? `Traces: ${inst.serviceName}` : 'Traces',
+        vscode.ViewColumn.Active,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
+        }
+      );
+      target = new TracesPanel(panel, controller, instanceId);
+      TracesPanel.panels.set(instanceId, target);
     }
-    const inst = controller.store.getInstance(instanceId);
-    const panel = vscode.window.createWebviewPanel(
-      'otel.traces',
-      inst ? `Traces: ${inst.serviceName}` : 'Traces',
-      vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
-    TracesPanel.panels.set(instanceId, new TracesPanel(panel, controller, instanceId));
+    if (focus) target.focus(focus);
   }
 
   private constructor(
@@ -30,73 +82,296 @@ export class TracesPanel {
     private readonly controller: OtelController,
     private readonly instanceId: string
   ) {
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, SCRIPT, STYLE);
+    const scriptUri = getUri(panel.webview, controller.extensionUri, 'dist', 'webview', 'tracesTable.js');
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
-    this.disposables.push(this.controller.store.onDidChange(() => this.postList()));
-    this.postList();
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.panel.visible && this.dirty) this.scheduleList();
+      },
+      null,
+      this.disposables
+    );
+    this.disposables.push(this.controller.store.onDidChange(() => this.scheduleList()));
+  }
+
+  // Hidden panels only mark themselves dirty; visible ones post at most every 500 ms.
+  private scheduleList(): void {
+    if (!this.ready) return;
+    if (!this.panel.visible) {
+      this.dirty = true;
+      return;
+    }
+    if (this.timer) return;
+    const wait = Math.max(0, this.lastPost + LIST_THROTTLE_MS - Date.now());
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.postList();
+      this.refreshWaterfall();
+    }, wait);
   }
 
   private postList(): void {
-    const inst = this.controller.store.getInstance(this.instanceId);
+    this.dirty = false;
+    this.lastPost = Date.now();
+    const store = this.controller.store;
+    const inst = store.getInstance(this.instanceId);
     if (!inst) {
-      this.panel.webview.postMessage({ type: 'list', traces: [], gone: true });
+      void this.panel.webview.postMessage({ type: 'list', traces: [], total: 0, gone: true });
       return;
     }
-    const filter = this.attrFilter;
-    const traces = [...inst.traces.values()]
-      .filter((t) => !filter || traceMatchesAttrFilter(t.spans.values(), filter))
-      .sort((a, b) => b.startMs - a.startMs)
-      .map((t) => {
-        const root = t.rootSpanId ? t.spans.get(t.rootSpanId) : undefined;
-        const rootName =
-          root?.name ?? [...t.spans.values()].sort((a, b) => a.startMs - b.startMs)[0]?.name ?? '(unknown)';
-        return {
-          traceId: t.traceId,
-          root: rootName,
-          start: new Date(t.startMs).toISOString(),
-          durationMs: t.durationMs,
-          durationLabel: formatDuration(t.durationMs),
-          spanCount: t.spans.size,
-          hasError: t.hasError,
-          services: [...t.serviceNames].join(', '),
-        };
-      });
-    this.panel.webview.postMessage({ type: 'list', traces });
+
+    const { query, errors } = parseTraceQuery(this.input);
+    const filtering = !isEmptyQuery(query);
+    const entries: { summary: TraceSummary; parts: TracePart[] }[] = [];
+    const services = new Set<string>();
+    let newest = 0;
+    for (const traceId of inst.traces.keys()) {
+      const parts = store.getTraceParts(traceId);
+      const summary = this.cache.get(traceId, parts);
+      entries.push({ summary, parts });
+      for (const s of summary.row.services) services.add(s);
+      newest = Math.max(newest, summary.row.startMs);
+    }
+    this.cache.prune(new Set(inst.traces.keys()));
+
+    const [from] = windowBounds(newest, this.input.range);
+    const logCounts = this.withLogs ? store.countLogsByTrace() : undefined;
+    const traces: TraceRow[] = [];
+    for (const { summary, parts } of entries) {
+      const row = summary.row;
+      if (row.startMs < from) continue;
+      if (filtering && !matchesTrace(taggedSpans(parts), row, query)) continue;
+      const out: TraceRow = { ...row };
+      if (logCounts) out.logCount = logCounts.get(row.traceId) ?? 0;
+      if (this.attrKeys.length) {
+        const attrs: Record<string, string> = {};
+        for (const k of this.attrKeys) {
+          const v = rootAttrValue(summary.root, k);
+          if (v !== undefined) attrs[k] = v;
+        }
+        out.rootAttrs = attrs;
+      }
+      traces.push(out);
+    }
+
+    void this.panel.webview.postMessage({
+      type: 'list',
+      traces,
+      total: inst.traces.size,
+      services: [...services].sort(),
+      attrKeys: collectRootAttrKeys(entries.map((e) => e.summary)),
+      errors,
+    });
   }
 
-  private onMessage(m: any): void {
-    if (m?.type === 'examine' && typeof m.traceId === 'string') {
-      this.postWaterfall(m.traceId);
-    } else if (m?.type === 'attrFilter' && typeof m.text === 'string') {
-      this.attrFilter = parseAttrFilter(m.text);
-      this.postList();
-    } else if (m?.type === 'ready') {
-      this.postList();
+  private applyQuery(m: { input?: unknown; attrKeys?: unknown; logs?: unknown }): void {
+    this.input = sanitizeQueryInput(m.input);
+    this.attrKeys = sanitizeAttrKeys(m.attrKeys);
+    this.withLogs = m.logs === true;
+  }
+
+  private onMessage(m: unknown): void {
+    const msg = m as Record<string, unknown> | undefined;
+    switch (msg?.type) {
+      case 'examine':
+        if (typeof msg.traceId === 'string' && TRACE_ID.test(msg.traceId)) this.postWaterfall(msg.traceId);
+        break;
+      case 'query':
+        this.applyQuery(msg);
+        clearTimeout(this.timer);
+        this.timer = undefined;
+        this.postList();
+        break;
+      case 'ready':
+        this.applyQuery(msg);
+        this.ready = true;
+        this.postList();
+        if (this.pendingFocus) {
+          const f = this.pendingFocus;
+          this.pendingFocus = undefined;
+          this.postWaterfall(f.traceId, f.spanId);
+        }
+        break;
+      case 'viewLogs':
+        void this.viewLogs(msg.traceId, msg.spanId);
+        break;
+      case 'openLog':
+        void this.openLog(msg.seq, msg.instanceId);
+        break;
+      case 'navigateSpan': {
+        const span = typeof msg.spanId === 'string' ? this.current?.spans.get(msg.spanId) : undefined;
+        if (span) void openCodeLocation(span.span.codeLocation);
+        break;
+      }
+      case 'revealLink':
+        this.revealLink(msg.traceId, msg.spanId);
+        break;
+      case 'copy':
+        if (typeof msg.text === 'string' && (TRACE_ID.test(msg.text) || SPAN_ID.test(msg.text))) {
+          void vscode.env.clipboard.writeText(msg.text);
+          vscode.window.setStatusBarMessage(`Copied ${msg.text}`, 2000);
+        }
+        break;
     }
   }
 
-  private postWaterfall(traceId: string): void {
-    const tagged = this.controller.store.getSpansForTrace(traceId);
-    const rows = buildWaterfall(tagged);
-    const total = rows.reduce((max, r) => Math.max(max, r.offsetMs + r.durationMs), 0);
-    this.panel.webview.postMessage({ type: 'waterfall', traceId, rows, totalMs: total });
+  private async viewLogs(traceId: unknown, spanId: unknown): Promise<void> {
+    const cur = this.current;
+    if (!cur || traceId !== cur.traceId) return;
+    let instanceId: string | undefined;
+    if (spanId !== undefined) {
+      const span = typeof spanId === 'string' ? cur.spans.get(spanId) : undefined;
+      if (!span) return;
+      // Prefer the span's own instance when it actually holds logs for the span.
+      const counts = this.controller.store.countLogsByInstance(cur.traceId, span.span.spanId);
+      if (counts.has(span.instanceId)) instanceId = span.instanceId;
+    }
+    await vscode.commands.executeCommand('otel._revealLogs', { traceId: cur.traceId, spanId, instanceId });
+  }
+
+  private async openLog(seq: unknown, instanceId: unknown): Promise<void> {
+    if (!Number.isInteger(seq) || typeof instanceId !== 'string' || !this.current) return;
+    const log = this.controller.store.findLog(instanceId, seq as number);
+    if (!log || log.traceId !== this.current.traceId) return;
+    await vscode.commands.executeCommand('otel._revealLogs', {
+      traceId: log.traceId,
+      spanId: log.spanId,
+      instanceId,
+      focusSeq: log.seq,
+    });
+  }
+
+  private revealLink(traceId: unknown, spanId: unknown): void {
+    if (typeof traceId !== 'string' || typeof spanId !== 'string') return;
+    if (!this.current?.links.has(`${traceId}/${spanId}`)) return;
+    if (!this.controller.store.findTraceInstances(traceId).length) {
+      vscode.window.showInformationMessage('The linked trace is not in collected data.');
+      return;
+    }
+    this.postWaterfall(traceId, spanId);
+  }
+
+  private focus(f: TraceFocus): void {
+    if (this.ready) this.postWaterfall(f.traceId, f.spanId);
+    else this.pendingFocus = f;
+  }
+
+  private waterfallSignature(traceId: string): string {
+    let logs = 0;
+    for (const n of this.controller.store.countLogsByInstance(traceId).values()) logs += n;
+    return `${traceSignature(this.controller.store.getTraceParts(traceId))}#${logs}`;
+  }
+
+  private refreshWaterfall(): void {
+    const cur = this.current;
+    if (cur && this.waterfallSignature(cur.traceId) !== cur.sig) this.postWaterfall(cur.traceId, undefined, true);
+  }
+
+  private postWaterfall(traceId: string, focusSpanId?: string, refresh = false): void {
+    const store = this.controller.store;
+    const tagged = store.getSpansForTrace(traceId);
+    const sig = this.waterfallSignature(traceId);
+    if (!tagged.length) {
+      this.current = { traceId, spans: new Map(), links: new Set(), sig };
+      void this.panel.webview.postMessage({ type: 'waterfall', traceId, gone: true });
+      return;
+    }
+    const logs = store.getLogsForTrace(traceId, { limit: MAX_WATERFALL_LOGS });
+    const resources = new Map<string, { serviceName: string; attrs: KeyValueMap }>();
+    const spans = new Map<string, TaggedSpan>();
+    const links = new Set<string>();
+    for (const t of tagged) {
+      spans.set(t.span.spanId, t);
+      for (const l of t.span.links) links.add(`${l.traceId}/${l.spanId}`);
+      if (resources.has(t.instanceId)) continue;
+      const inst = store.getInstance(t.instanceId);
+      if (inst) resources.set(t.instanceId, { serviceName: inst.serviceName, attrs: inst.resourceAttrs });
+    }
+    const payload = buildWaterfallPayload(traceId, tagged, logs.items, resources, {
+      truncated: logs.truncated,
+      linkAvailable: (id) => store.findTraceInstances(id).length > 0,
+    });
+    this.current = { traceId, spans, links, sig };
+    void this.panel.webview.postMessage({ type: 'waterfall', ...payload, focusSpanId, refresh });
   }
 
   private dispose(): void {
+    clearTimeout(this.timer);
     TracesPanel.panels.delete(this.instanceId);
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }
 
-const STYLE = `
+const QUERY_HELP =
+  'All terms must match. Span terms must hold on the same span: service=, name: (contains), name=, ' +
+  'status=error|ok|unset, kind=server|client|…, key=value (contains), key!=value, key>n, key<n, ' +
+  'has:key or dotted.key (present), -key (absent). Trace terms: dur>200ms, dur<1s, trace:abc. ' +
+  'Other words match a span name or the trace ID; quote phrases with spaces.';
+
+const STYLE = `${COLUMN_TABLE_CSS}
+  .query-bar { padding-top: 0; border-bottom: none; }
+  .query-bar input { flex: 1 1 auto; font-family: var(--vscode-editor-font-family, monospace); }
+  .query-bar input[aria-invalid="true"] { border-color: var(--vscode-inputValidation-warningBorder, #cca700); }
+  .q-errors {
+    flex: 0 0 auto; padding: 4px 8px; font-size: 0.9em;
+    color: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+    background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
+    border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-panel-border));
+  }
+  .q-errors[hidden] { display: none; }
+  .toolbar { border-bottom: none; }
+  .toolbar + .q-errors, .query-bar { border-bottom: 1px solid var(--vscode-panel-border); }
+  .count { margin-left: auto; }
   .split { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
   .list { flex: 1 1 45%; min-height: 120px; overflow: auto; border-bottom: 2px solid var(--vscode-panel-border); }
+  td.plain, td.status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  td.num, th.num { text-align: right; }
+  td.mono { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.9em; }
+  tr.selectable:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   .wf-split { flex: 1 1 55%; min-height: 0; display: flex; }
-  .wf { flex: 1 1 auto; min-width: 0; overflow: auto; padding: 8px; }
+  .wf { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 8px 8px 0; }
+  .wf-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .wf-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-toggle { display: inline-flex; align-items: center; gap: 4px; }
+  .wf-note { font-size: 0.9em; margin-bottom: 4px; color: var(--vscode-descriptionForeground); }
+  .wf-note[hidden], .trace-logs[hidden] { display: none; }
+  .wf-rows { flex: 1 1 auto; min-height: 0; overflow: auto; padding-bottom: 8px; }
+  .trace-logs { border-bottom: 1px dashed var(--vscode-panel-border); margin-bottom: 2px; }
+  .log-marker {
+    position: absolute; top: 1px; z-index: 1; transform: translateX(-50%);
+    min-width: 10px; height: 12px; padding: 0 2px; border-radius: 6px;
+    font-size: 9px; line-height: 12px; color: #fff; text-align: center; cursor: pointer;
+    border: 1px solid var(--vscode-editor-background);
+  }
+  .log-marker:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+  .log-marker.clamped { border-style: dashed; }
+  .log-marker.sev-error { background: var(--vscode-charts-red, #f14c4c); }
+  .log-marker.sev-warn { background: var(--vscode-charts-yellow, #cca700); color: #000; }
+  .log-marker.sev-info { background: var(--vscode-charts-green, #89d185); color: #000; }
+  .log-marker.sev-debug { background: var(--vscode-charts-foreground, #888); }
+  .sev { font-weight: 600; }
+  .sev.sev-error { color: var(--vscode-errorForeground); }
+  .sev.sev-warn { color: var(--vscode-editorWarning-foreground, #cca700); }
+  .sd-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+  .sd-log { padding: 3px 4px; border-radius: 3px; }
+  .sd-log.hl { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.33)); }
+  .sd-msg { white-space: pre-wrap; word-break: break-word; }
+  .sd-open { display: inline; margin-left: 6px; font-size: 0.9em; }
+  .skew { font-size: 0.8em; padding: 0 4px; border-radius: 2px; border: 1px dashed var(--vscode-editorWarning-foreground, #cca700); }
+  .sd-resource { margin-top: 12px; }
+  .sd-resource summary { cursor: pointer; font-weight: 600; }
+  .link {
+    padding: 0; border: none; background: none; font: inherit; cursor: pointer;
+    color: var(--vscode-textLink-foreground); text-align: left;
+  }
+  .link:hover { background: none; color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+  .link:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
   .err { color: var(--vscode-errorForeground); }
-  .bar-row { display: flex; align-items: center; height: 22px; font-size: 0.9em; cursor: pointer; }
+  tr.selected .err { color: inherit; }
+  .bar-row { display: flex; align-items: center; height: 22px; flex: 0 0 22px; font-size: 0.9em; cursor: pointer; }
   .bar-row:hover { background: var(--vscode-list-hoverBackground); }
   .bar-row.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
   .bar-row.selected .kind, .bar-row.selected .bar-dur { color: inherit; }
@@ -125,170 +400,60 @@ const STYLE = `
 `;
 
 const BODY = `
+<div class="toolbar">
+  <select id="service" aria-label="Service"></select>
+  <input id="name" type="text" placeholder="span name…" aria-label="Span name contains" style="width:140px" />
+  <select id="status" aria-label="Span status"></select>
+  <select id="kind" aria-label="Span kind"></select>
+  <input id="attr" type="text" placeholder="attr key[=value]…" aria-label="Span attribute filter"
+    title="key: attribute present · key=value: value contains text (case-insensitive) · several terms are AND'd on the same span"
+    style="min-width:170px" />
+  <input id="minMs" type="number" min="0" placeholder="min ms" aria-label="Minimum trace duration in ms" style="width:80px" />
+  <input id="maxMs" type="number" min="0" placeholder="max ms" aria-label="Maximum trace duration in ms" style="width:80px" />
+  <input id="traceIdQ" type="text" placeholder="trace id…" aria-label="Trace ID contains" style="width:120px" />
+  <span class="range-picker" title="Time window, measured back from the newest trace received">
+    ${RANGE_ICON_SVG}
+    <select id="range" aria-label="Time range"></select>
+  </span>
+  <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
+  <span id="count" class="count muted"></span>
+</div>
+<div class="toolbar query-bar">
+  <input id="query" type="text" spellcheck="false" aria-label="Advanced trace query" aria-describedby="qErrors"
+    placeholder='Query, e.g. service=checkout status=error dur>200ms http.status_code>=500 "GET /api"'
+    title="${QUERY_HELP}" />
+</div>
+<div id="qErrors" class="q-errors" role="status" aria-live="polite" hidden></div>
 <div class="split">
-  <div class="toolbar">
-    <input id="minDur" type="number" min="0" placeholder="min ms" style="width:90px" />
-    <input id="tid" type="text" placeholder="trace id contains…" style="min-width:160px" />
-    <input id="attrFilter" type="text" placeholder="attr key[=value]…" title="key: attribute present · key=value: value contains text (case-insensitive)" style="min-width:200px" />
-    <label><input id="errOnly" type="checkbox" /> errors only</label>
-    <span id="count" class="muted count" style="margin-left:auto"></span>
-  </div>
-  <div class="list"><table><thead>
-    <tr><th>Trace</th><th style="width:120px">Duration</th><th style="width:70px">Spans</th><th style="width:180px">Start</th><th>Services</th></tr>
-  </thead><tbody id="tbody"></tbody></table>
-  <div id="empty" class="empty">Waiting for traces…</div>
+  <div id="rows" class="list rows">
+    <table id="table" role="grid" aria-label="Traces">
+      <colgroup id="cols"></colgroup>
+      <thead><tr id="head" aria-rowindex="1"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty">Waiting for traces…</div>
   </div>
   <div class="wf-split">
-    <div id="wfMain" class="wf"><div id="wfTitle" class="muted">Select a trace and click Examine to view spans.</div><div id="wf"></div></div>
-    <aside id="spanDetail" hidden></aside>
+    <div id="wfMain" class="wf">
+      <div class="wf-head">
+        <button id="wfBack" class="secondary" title="Back to the previous trace" hidden>← Back</button>
+        <div id="wfTitle" class="muted wf-title">Select a trace to view its spans.</div>
+        <label class="wf-toggle"><input id="wfShowLogs" type="checkbox" /> Show logs</label>
+        <button id="wfViewLogs" class="secondary" disabled>View logs for trace</button>
+        <button id="wfCopy" class="secondary" disabled>Copy trace ID</button>
+      </div>
+      <div id="wfNote" class="wf-note" role="status" hidden></div>
+      <div id="wfTraceLogs" class="bar-row trace-logs" hidden></div>
+      <div id="wf" class="wf-rows" role="tree" aria-label="Spans"></div>
+    </div>
+    <aside id="spanDetail" aria-label="Span details" hidden></aside>
   </div>
 </div>
-`;
-
-const SCRIPT = `
-const vscode = acquireVsCodeApi();
-let traces = [];
-let selected = '';
-const tbody = document.getElementById('tbody');
-const empty = document.getElementById('empty');
-const count = document.getElementById('count');
-const minDur = document.getElementById('minDur');
-const tid = document.getElementById('tid');
-const errOnly = document.getElementById('errOnly');
-const wf = document.getElementById('wf');
-const detail = document.getElementById('spanDetail');
-let currentTrace = '';
-let currentRows = [];
-let selectedSpan = '';
-
-const ESC_MAP = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
-function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>ESC_MAP[c]); }
-
-function apply(){
-  const md = parseFloat(minDur.value)||0;
-  const f = tid.value.trim().toLowerCase();
-  const eo = errOnly.checked;
-  const rows = traces.filter(t => t.durationMs>=md && (!f || t.traceId.toLowerCase().includes(f)) && (!eo || t.hasError));
-  tbody.innerHTML='';
-  const frag=document.createDocumentFragment();
-  for (const t of rows){
-    const tr=document.createElement('tr');
-    tr.className='selectable'+(t.traceId===selected?' selected':'');
-    tr.innerHTML='<td>'+(t.hasError?'<span class="err">●</span> ':'')+esc(t.root)+' <span class="muted">'+esc(t.traceId.slice(0,12))+'…</span></td>'+
-      '<td>'+esc(t.durationLabel)+'</td><td>'+t.spanCount+'</td><td class="muted">'+esc(t.start)+'</td><td class="muted">'+esc(t.services)+'</td>';
-    tr.addEventListener('click', ()=>{ selected=t.traceId; vscode.postMessage({type:'examine', traceId:t.traceId}); apply(); });
-    frag.appendChild(tr);
-  }
-  tbody.appendChild(frag);
-  count.textContent = rows.length+' of '+traces.length+' traces';
-  empty.style.display = traces.length ? 'none':'block';
-}
-
-function renderWaterfall(traceId, rows, totalMs){
-  document.getElementById('wfTitle').textContent = 'Trace '+traceId+'  ·  '+rows.length+' spans  ·  '+totalMs.toFixed(2)+'ms  ·  click a span for details';
-  if (traceId !== currentTrace) selectedSpan = '';
-  currentTrace = traceId;
-  currentRows = rows;
-  wf.innerHTML='';
-  const scale = totalMs>0? 100/totalMs : 0;
-  rows.forEach((r, i)=>{
-    const row=document.createElement('div');
-    row.className='bar-row'+(r.spanId===selectedSpan?' selected':'');
-    row.dataset.idx=String(i);
-    row.tabIndex=0;
-    const pad = r.depth*14;
-    const left = r.offsetMs*scale;
-    const width = Math.max(0.5, r.durationMs*scale);
-    row.innerHTML =
-      '<div class="bar-label" style="padding-left:'+pad+'px" title="'+esc(r.name)+'">'+
-        '<span class="svc-badge">'+esc(r.service)+'</span>'+esc(r.name)+'<span class="kind">'+esc(r.kind)+'</span></div>'+
-      '<div class="bar-track"><div class="bar'+(r.hasError?' error':'')+'" style="left:'+left+'%;width:'+width+'%"></div></div>'+
-      '<div class="bar-dur">'+r.durationMs.toFixed(2)+'ms</div>';
-    wf.appendChild(row);
-  });
-  const sel = rows.find(r=>r.spanId===selectedSpan);
-  if (sel) renderSpanDetail(sel); else hideDetail();
-}
-
-function selectSpan(idx){
-  const r = currentRows[idx];
-  if (!r) return;
-  selectedSpan = r.spanId;
-  for (const el of wf.querySelectorAll('.bar-row')) el.classList.toggle('selected', el.dataset.idx===String(idx));
-  renderSpanDetail(r);
-}
-
-function hideDetail(){
-  selectedSpan = '';
-  for (const el of wf.querySelectorAll('.bar-row.selected')) el.classList.remove('selected');
-  detail.hidden = true;
-  detail.innerHTML = '';
-}
-
-function fmtOffset(ms){ return (ms>=0?'+':'')+ms.toFixed(2)+'ms'; }
-
-function kvTable(entries){
-  return '<table class="kv">'+entries.map(a=>'<tr><td class="k">'+esc(a.key)+'</td><td>'+
-    (a.structured ? '<pre class="val">'+esc(a.value)+'</pre>' : '<div class="val">'+esc(a.value)+'</div>')+
-    '</td></tr>').join('')+'</table>';
-}
-
-function metaRow(k, html){ return '<tr><td class="k">'+esc(k)+'</td><td>'+html+'</td></tr>'; }
-
-function renderSpanDetail(r){
-  let status = esc(r.status)+(r.statusMessage ? ' — '+esc(r.statusMessage) : '');
-  if (r.hasError) status = '<span class="err">'+status+'</span>';
-  let meta = metaRow('Status', status)+
-    metaRow('Duration', esc(r.durationMs.toFixed(2)+'ms'))+
-    metaRow('Start', esc(fmtOffset(r.offsetMs)))+
-    metaRow('Span ID', '<code>'+esc(r.spanId)+'</code>');
-  if (r.parentSpanId) meta += metaRow('Parent ID', '<code>'+esc(r.parentSpanId)+'</code>');
-  if (r.scope) meta += metaRow('Scope', esc(r.scope));
-  let html =
-    '<div class="sd-head"><div class="sd-title"><span class="svc-badge">'+esc(r.service)+'</span><strong>'+esc(r.name)+'</strong>'+
-      '<span class="kind">'+esc(r.kind)+'</span></div>'+
-      '<button id="sdClose" class="secondary" title="Close" aria-label="Close span details">×</button></div>'+
-    '<table class="kv">'+meta+'</table>'+
-    '<h4>Attributes ('+r.attrs.length+')</h4>'+
-    (r.attrs.length ? kvTable(r.attrs) : '<div class="muted">No attributes</div>')+
-    '<h4>Events ('+r.events.length+')</h4>';
-  if (!r.events.length) html += '<div class="muted">No events</div>';
-  for (const ev of r.events){
-    html += '<div class="sd-event"><div><strong>'+esc(ev.name)+'</strong> <span class="muted">'+esc(fmtOffset(ev.offsetMs))+'</span></div>'+
-      (ev.attrs.length ? kvTable(ev.attrs) : '')+'</div>';
-  }
-  detail.innerHTML = html;
-  detail.hidden = false;
-  detail.scrollTop = 0;
-}
-
-wf.addEventListener('click', (e)=>{
-  const row = e.target.closest('.bar-row');
-  if (row) selectSpan(Number(row.dataset.idx));
-});
-wf.addEventListener('keydown', (e)=>{
-  if (e.key!=='Enter' && e.key!==' ') return;
-  const row = e.target.closest('.bar-row');
-  if (!row) return;
-  e.preventDefault();
-  selectSpan(Number(row.dataset.idx));
-});
-detail.addEventListener('click', (e)=>{ if (e.target.closest('#sdClose')) hideDetail(); });
-
-minDur.addEventListener('input', apply);
-tid.addEventListener('input', apply);
-errOnly.addEventListener('change', apply);
-const attrFilter = document.getElementById('attrFilter');
-let attrTimer;
-attrFilter.addEventListener('input', ()=>{
-  clearTimeout(attrTimer);
-  attrTimer = setTimeout(()=>vscode.postMessage({type:'attrFilter', text:attrFilter.value}), 200);
-});
-
-window.addEventListener('message', (e)=>{
-  const m=e.data;
-  if(m.type==='list'){ traces=m.traces; if(!traces.find(t=>t.traceId===selected)) selected=''; apply(); }
-  else if(m.type==='waterfall'){ renderWaterfall(m.traceId, m.rows, m.totalMs); }
-});
-vscode.postMessage({type:'ready'});
+<div id="columnsPanel" class="popover" role="dialog" aria-label="Choose columns" hidden>
+  <div class="popover-head">
+    <input id="colSearch" type="text" placeholder="Search columns…" aria-label="Search columns" />
+    <button id="colReset" class="secondary" title="Restore default columns, order and widths">Reset</button>
+  </div>
+  <div id="colList"></div>
+</div>
 `;

@@ -285,6 +285,38 @@ describe('logView filter pipeline', () => {
     const out = sortLogs(filterLogs(corpus, f({ level: 13 })), { col: 'time', dir: 'desc' });
     assert.deepStrictEqual(ids(out), [4, 1]);
   });
+
+  describe('trace correlation', () => {
+    const T1 = 'a'.repeat(32);
+    const T2 = 'b'.repeat(32);
+    const S1 = '1'.repeat(16);
+    const S2 = '2'.repeat(16);
+    const linked: WireLog[] = [
+      wl(1, { timeMs: 0, traceId: T1, spanId: S1, body: 'old' }),
+      wl(2, { timeMs: 500_000, traceId: T1, spanId: S2, severityNumber: 17 }),
+      wl(3, { timeMs: 500_100, traceId: T2, spanId: S1 }),
+      wl(4, { timeMs: 500_200, traceId: T1 }),
+      wl(5, { timeMs: 500_300 }),
+    ];
+
+    it('matches a trace exactly', () => {
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ traceId: T1 }))), [1, 2, 4]);
+    });
+
+    it('matches trace and span together', () => {
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ traceId: T1, spanId: S1 }))), [1]);
+    });
+
+    it('ignores the time range while correlating', () => {
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ range: '1m' }))), [2, 3, 4, 5]);
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ range: '1m', traceId: T1 }))), [1, 2, 4]);
+    });
+
+    it('still combines with text and level filters', () => {
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ traceId: T1, level: 17 }))), [2]);
+      assert.deepStrictEqual(ids(filterLogs(linked, f({ traceId: T1, query: 'old' }))), [1]);
+    });
+  });
 });
 
 describe('logView density modes', () => {

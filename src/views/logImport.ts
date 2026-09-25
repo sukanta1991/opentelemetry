@@ -1,6 +1,7 @@
 // Pure parsers for imported log files. Input is untrusted, so every field is validated and
 // the first violation aborts the import rather than yielding a silently partial result.
 
+import { normalizeSpanId, normalizeTraceId } from '../store/ids';
 import { AttributeValue, KeyValueMap, LogRecord } from '../store/model';
 
 export type ImportFormat = 'otlp' | 'plain' | 'jsonl' | 'unknown';
@@ -61,6 +62,19 @@ function optionalString(v: unknown, path: string): string | undefined {
   if (typeof v !== 'string') fail(path, 'a string');
   return v;
 }
+
+// Unrecognized vendor id formats are kept verbatim so they stay visible and searchable.
+function importedId(
+  v: string | undefined,
+  normalize: (v: unknown) => string | undefined
+): string | undefined {
+  const t = v?.trim();
+  if (!t || /^(0x)?[0-]+$/i.test(t)) return undefined;
+  return normalize(t) ?? t;
+}
+
+const traceIdOf = (v: string | undefined) => importedId(v, normalizeTraceId);
+const spanIdOf = (v: string | undefined) => importedId(v, normalizeSpanId);
 
 function assertSafeKeys(o: Record<string, unknown>, path: string): void {
   for (const key of Object.keys(o)) {
@@ -249,8 +263,8 @@ export function parseOtlpJson(value: unknown): ImportedLogs {
             rec.attributes === undefined ? [] : expectArray(rec.attributes, `${path}.attributes`),
             `${path}.attributes`
           ),
-          traceId: optionalString(rec.traceId, `${path}.traceId`),
-          spanId: optionalString(rec.spanId, `${path}.spanId`),
+          traceId: traceIdOf(optionalString(rec.traceId, `${path}.traceId`)),
+          spanId: spanIdOf(optionalString(rec.spanId, `${path}.spanId`)),
           scope,
         });
       }
@@ -287,8 +301,8 @@ export function parsePlainJson(value: unknown): ImportedLogs {
       severityText: optionalString(rec.severityText, `${path}.severityText`) ?? '',
       body: readAttributeValue(rec.body, `${path}.body`),
       attrs: readAttrs(rec.attributes, `${path}.attributes`),
-      traceId: optionalString(rec.traceId, `${path}.traceId`),
-      spanId: optionalString(rec.spanId, `${path}.spanId`),
+      traceId: traceIdOf(optionalString(rec.traceId, `${path}.traceId`)),
+      spanId: spanIdOf(optionalString(rec.spanId, `${path}.spanId`)),
       scope: optionalString(rec.scope, `${path}.scope`),
       codeLocation: readCodeLocation(rec.codeLocation, `${path}.codeLocation`),
     });
@@ -534,8 +548,8 @@ export function mapJsonlRecord(value: Record<string, unknown>, path: string): Ma
       severityText,
       body,
       attrs,
-      traceId: str(traceField),
-      spanId: str(spanField),
+      traceId: traceIdOf(str(traceField)),
+      spanId: spanIdOf(str(spanField)),
       scope: str(scopeField),
     },
     serviceName: str(serviceField),

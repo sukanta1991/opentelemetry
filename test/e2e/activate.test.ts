@@ -134,6 +134,9 @@ async function main() {
     'otel.removeInstance',
     'otel.showSnippets',
     'otel.openTerminalWithEnv',
+    'otel.findTrace',
+    'otel._revealTrace',
+    'otel._revealLogs',
   ]) {
     assert.ok(registeredCommands.has(cmd), `command registered: ${cmd}`);
   }

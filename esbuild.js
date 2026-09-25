@@ -46,9 +46,13 @@ async function main() {
     plugins: [copyAssetsPlugin],
   });
 
-  // Separate browser bundles for the panel webviews (metrics charts, logs table).
+  // Separate browser bundles for the panel webviews (metrics charts, logs table, traces table).
   const webviewCtx = await esbuild.context({
-    entryPoints: ['src/views/webview/metricsChart.ts', 'src/views/webview/logsTable.ts'],
+    entryPoints: [
+      'src/views/webview/metricsChart.ts',
+      'src/views/webview/logsTable.ts',
+      'src/views/webview/tracesTable.ts',
+    ],
     bundle: true,
     format: 'iife',
     platform: 'browser',

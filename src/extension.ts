@@ -7,6 +7,8 @@ import { InstanceNode, InstancesTreeProvider } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
+import { revealLogs, revealTrace } from './views/navigation';
+import { parseTraceIdInput, parseTraceTarget } from './views/navigationTargets';
 import { ServiceMapPanel } from './views/serviceMapPanel';
 import { TracesPanel } from './views/tracesPanel';
 
@@ -18,6 +20,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const tree = new InstancesTreeProvider(controller);
   context.subscriptions.push(
+    tree,
     vscode.window.createTreeView('otel.instances', { treeDataProvider: tree })
   );
 
@@ -79,7 +82,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('otel.removeInstance', async (arg) => {
       const id = await resolveInstanceId(arg);
       if (id) controller.store.removeInstance(id);
-    })
+    }),
+    vscode.commands.registerCommand('otel._revealTrace', (arg: unknown) => {
+      const target = parseTraceTarget(arg);
+      if (target) revealTrace(controller, { ...target, preferInstanceId: stringProp(arg, 'preferInstanceId') });
+    }),
+    vscode.commands.registerCommand('otel._revealLogs', async (arg: unknown) => {
+      const target = parseTraceTarget(arg);
+      if (target) {
+        const seq = arg && typeof arg === 'object' ? (arg as Record<string, unknown>).focusSeq : undefined;
+        await revealLogs(controller, {
+          ...target,
+          instanceId: stringProp(arg, 'instanceId'),
+          focusSeq: Number.isInteger(seq) ? (seq as number) : undefined,
+        });
+      }
+    }),
+    vscode.commands.registerCommand('otel.findTrace', () => findTrace())
   );
 
   context.subscriptions.push(
@@ -95,6 +114,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (readSettings().launchOnStartup) {
     await controller.start();
   }
+}
+
+function stringProp(arg: unknown, key: string): string | undefined {
+  const v = arg && typeof arg === 'object' ? (arg as Record<string, unknown>)[key] : undefined;
+  return typeof v === 'string' ? v : undefined;
+}
+
+async function findTrace(): Promise<void> {
+  const input = await vscode.window.showInputBox({
+    title: 'Find Trace by ID',
+    prompt: 'Trace ID or W3C traceparent header',
+    placeHolder: '4bf92f3577b34da6a3ce929d0e0e4736',
+    validateInput: (v) =>
+      !v.trim() || parseTraceIdInput(v) ? undefined : 'Enter a 32-character hex trace ID or a traceparent value',
+  });
+  const target = input ? parseTraceIdInput(input) : undefined;
+  if (target) revealTrace(controller, target);
 }
 
 function requireRunning(): boolean {
