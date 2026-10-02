@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Local timezone display for log and trace timestamps and metric chart axes. The `otel.useLocalTime` setting switches between local time and UTC; the default is local time.
 - **Save Session / Load Session**: save everything the receiver captured (traces, logs and metrics, including metric history) to one `.otel.json` file and load it back later. Each section of the file is a standard OTLP `Export*ServiceRequest`.
 - Save scopes: all data (**Save Session…** in the Instances toolbar), one instance (**Save Instance…** on an instance), one loaded file, or one trace with its correlated logs (**Export Trace…** when you right-click a row in the Traces panel).
 - **Load Session…** also accepts a bare OTLP/JSON request and OpenTelemetry Collector file-exporter JSON Lines, for example CI artifacts.
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Logs, Traces and metric chart axes now show timestamps in your local timezone instead of UTC, because `otel.useLocalTime` defaults to `true`. CSV and JSON log exports follow the same setting. Set it to `false` to keep UTC.
 - Each loaded file is isolated: waterfalls, trace-to-log links and the service map join only data from the same file, and live views no longer mix in imported data. AI tools still read everything.
 - `otel.import.maxFileSize` and `otel.import.maxRecords` also apply to loaded sessions. For sessions, `maxRecords` counts spans, logs and metric points together.
 - OTLP/JSON log export now keeps sub-millisecond timestamps.

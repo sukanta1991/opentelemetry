@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { useLocalTime } from '../settings';
 import { StoredLogRecord } from '../store/model';
 import { openCodeLocation } from './codeNav';
 import {
@@ -12,7 +13,15 @@ import {
 import { serializeLog } from './logSerialize';
 import { isLogColumnId } from './webview/logColumns';
 import { WireLog } from './webview/logView';
-import { COLUMN_TABLE_CSS, getNonce, getUri, htmlShell } from './webviewUtil';
+import {
+  COLUMN_TABLE_CSS,
+  getNonce,
+  getUri,
+  htmlShell,
+  postTimeZone,
+  timeZoneAttr,
+  watchTimeZone,
+} from './webviewUtil';
 
 // Settings the webview may ask the host to reveal; never pass through an arbitrary key.
 const OPENABLE_SETTINGS = new Set(['otel.retention.maxLogsPerInstance']);
@@ -87,9 +96,10 @@ export class LogsPanel {
       'webview',
       'logsTable.js'
     );
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneAttr());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }
@@ -138,6 +148,7 @@ export class LogsPanel {
       await this.exportLogs(m as ExportRequest);
     } else if (msg?.type === 'ready') {
       this.ready = true;
+      postTimeZone(this.panel.webview);
       this.lastPostedSeq = typeof msg.lastSeq === 'number' && msg.lastSeq > 0 ? msg.lastSeq : 0;
       this.lastOldestSeq = -1;
       const inst = this.controller.store.getInstance(this.instanceId);
@@ -196,7 +207,7 @@ export class LogsPanel {
     if (!log) return;
     const doc = await vscode.workspace.openTextDocument({
       language: 'json',
-      content: JSON.stringify(serializeLog(log), null, 2),
+      content: JSON.stringify(serializeLog(log, useLocalTime()), null, 2),
     });
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
   }
@@ -212,6 +223,8 @@ export class LogsPanel {
     const inst = this.controller.store.getInstance(this.instanceId);
     if (!inst) return;
 
+    // Read before the save dialog so the file matches what the user saw when they clicked Export.
+    const localTime = useLocalTime();
     const format = isExportFormat(req.format) ? req.format : 'json';
     const mode: ExportData = req.data === 'all' ? 'all' : 'grid';
     const columns = (req.columns ?? []).filter(isLogColumnId);
@@ -250,7 +263,8 @@ export class LogsPanel {
             resourceAttrs: inst.resourceAttrs,
           },
           mode,
-          columns
+          columns,
+          localTime
         );
         await vscode.workspace.fs.writeFile(uri, Buffer.from(text, 'utf8'));
       }

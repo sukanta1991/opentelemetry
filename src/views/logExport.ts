@@ -60,7 +60,8 @@ export function exportPlainJson(
   records: readonly StoredLogRecord[],
   inst: ExportInstance,
   mode: ExportData,
-  columns: readonly LogColumnId[]
+  columns: readonly LogColumnId[],
+  useLocalTime: boolean
 ): string {
   const envelope = {
     version: 1,
@@ -73,7 +74,8 @@ export function exportPlainJson(
   };
 
   if (mode === 'all') {
-    return JSON.stringify({ ...envelope, logs: records.map(serializeLog) }, null, 2);
+    // Full records keep UTC times whatever the display setting, like the OTLP export.
+    return JSON.stringify({ ...envelope, logs: records.map((l) => serializeLog(l, false)) }, null, 2);
   }
 
   // Grid mode mirrors what the table shows, keyed by column label.
@@ -84,7 +86,7 @@ export function exportPlainJson(
       columns: cols.map((id) => ({ id, label: columnLabel(id) })),
       logs: records.map((l) => {
         const row: Record<string, string> = {};
-        for (const id of cols) row[columnLabel(id)] = cellText(l, id);
+        for (const id of cols) row[columnLabel(id)] = cellText(l, id, useLocalTime);
         return row;
       }),
     },
@@ -131,12 +133,13 @@ function csvRow(cells: string[]): string {
 export function exportCsv(
   records: readonly StoredLogRecord[],
   mode: ExportData,
-  columns: readonly LogColumnId[]
+  columns: readonly LogColumnId[],
+  useLocalTime: boolean
 ): string {
   if (mode === 'grid') {
     const cols = columns.filter((id) => id !== 'select');
     const lines = [csvRow(cols.map(columnLabel))];
-    for (const l of records) lines.push(csvRow(cols.map((id) => cellText(l, id))));
+    for (const l of records) lines.push(csvRow(cols.map((id) => cellText(l, id, useLocalTime))));
     return lines.join('\r\n');
   }
 
@@ -144,8 +147,8 @@ export function exportCsv(
   const header = [...CORE_CSV_COLUMNS.map(columnLabel), ...attrKeys.map((k) => `attr.${k}`)];
   const lines = [csvRow(header)];
   for (const l of records) {
-    const core = CORE_CSV_COLUMNS.map((id) => cellText(l, id));
-    const attrs = attrKeys.map((k) => cellText(l, `attr:${k}`));
+    const core = CORE_CSV_COLUMNS.map((id) => cellText(l, id, useLocalTime));
+    const attrs = attrKeys.map((k) => cellText(l, `attr:${k}`, useLocalTime));
     lines.push(csvRow([...core, ...attrs]));
   }
   return lines.join('\r\n');
@@ -158,15 +161,16 @@ export function serializeExport(
   records: readonly StoredLogRecord[],
   inst: ExportInstance,
   mode: ExportData,
-  columns: readonly LogColumnId[]
+  columns: readonly LogColumnId[],
+  useLocalTime: boolean
 ): string {
   switch (format) {
     case 'otlp':
       return exportOtlpJson(records, inst);
     case 'csv':
-      return exportCsv(records, mode, columns);
+      return exportCsv(records, mode, columns, useLocalTime);
     default:
-      return exportPlainJson(records, inst, mode, columns);
+      return exportPlainJson(records, inst, mode, columns, useLocalTime);
   }
 }
 

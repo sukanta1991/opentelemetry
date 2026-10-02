@@ -95,6 +95,15 @@ type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let useLocalTime = document.body.dataset.useLocalTime !== 'false';
+
+// uPlot both places and labels time-axis ticks in the zone of the Date this returns.
+function chartDate(ts: number): Date {
+  const d = new Date(ts * 1000);
+  return useLocalTime ? d : uPlot.tzDate(d, 'Etc/UTC');
+}
+
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
@@ -517,6 +526,7 @@ function drawLine(
     width,
     height: 180,
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     legend: { show: false },
     axes: [
       { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
@@ -549,6 +559,7 @@ function drawStackedArea(container: HTMLElement, g: LineGraph, xRange: XRange): 
     width,
     height: 180,
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     legend: { show: false },
     axes: [
       { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
@@ -588,6 +599,7 @@ function drawTimeBars(container: HTMLElement, g: LineGraph, xRange: XRange): uPl
     height: 180,
     legend: { show: false },
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     axes: [
       { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
@@ -777,7 +789,7 @@ function renderSig(
   reduce: ReduceKind,
   wline: LineGraph | undefined
 ): string {
-  const parts: string[] = [kind, agg, reduce];
+  const parts: string[] = [kind, agg, reduce, useLocalTime ? 'local' : 'utc'];
   const g = wline && wline.xs.length > 0 ? wline : undefined;
   parts.push(g ? '1' : '0');
   if (kind === 'histogram') parts.push((m.bars?.categories ?? []).join('\u0001'));
@@ -1064,6 +1076,11 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data;
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    useLocalTime = m.useLocalTime;
+    apply();
+    return;
+  }
   if (m && m.type === 'data') {
     metrics = m.metrics || [];
     apply();

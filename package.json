@@ -418,6 +418,12 @@
     "configuration": {
       "title": "OpenTelemetry",
       "properties": {
+        "otel.useLocalTime": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Show log, trace and metric chart timestamps in your local timezone instead of UTC."
+        },
         "otel.launchOnStartup": {
           "type": "boolean",
           "default": false,

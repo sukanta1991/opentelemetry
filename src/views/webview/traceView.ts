@@ -1,7 +1,7 @@
 // Pure view-model for the traces table: query input, wire rows, sorting, cell text and the
 // persisted panel state. Shared by the extension host, the webview bundle and unit tests.
 
-import { formatDuration } from '../format';
+import { formatDuration, formatTimestamp } from '../format';
 import * as cols from './columnState';
 import {
   DEFAULT_TRACE_ATTR_WIDTH,
@@ -173,7 +173,7 @@ export function sortTraces(rows: TraceRow[], sort: TraceSort): TraceRow[] {
 
 // --- Cell text -------------------------------------------------------------------------
 
-export function traceCellText(r: TraceRow, col: TraceColumnId): string {
+export function traceCellText(r: TraceRow, col: TraceColumnId, useLocalTime: boolean): string {
   const key = cols.parseAttrColumn(col);
   if (key !== undefined) return r.rootAttrs?.[key] ?? '';
   switch (col) {
@@ -184,7 +184,7 @@ export function traceCellText(r: TraceRow, col: TraceColumnId): string {
     case 'traceId':
       return r.traceId;
     case 'start':
-      return new Date(r.startMs).toISOString();
+      return formatTimestamp(r.startMs, useLocalTime);
     case 'duration':
       return formatDuration(r.durationMs);
     case 'spans':

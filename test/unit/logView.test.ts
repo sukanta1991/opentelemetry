@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { formatTimestamp } from '../../src/views/format';
 import {
   DEFAULT_DENSITY,
   DEFAULT_LOG_RANGE,
@@ -152,29 +153,31 @@ describe('logView cell text', () => {
   });
 
   it('renders each column', () => {
-    assert.strictEqual(cellText(log, 'time'), new Date(1000).toISOString());
-    assert.strictEqual(cellText(log, 'observedTime'), new Date(1000).toISOString());
-    assert.strictEqual(cellText(log, 'level'), 'ERROR', 'falls back to severityLabel');
-    assert.strictEqual(cellText(log, 'severityNumber'), '17');
-    assert.strictEqual(cellText(log, 'message'), '{"a":1}');
-    assert.strictEqual(cellText(log, 'traceId'), 'abc');
-    assert.strictEqual(cellText(log, 'spanId'), 'def');
-    assert.strictEqual(cellText(log, 'scope'), 'my.scope');
-    assert.strictEqual(cellText(log, 'codeLocation'), '/src/a.ts:12');
-    assert.strictEqual(cellText(log, 'function'), 'run');
-    assert.strictEqual(cellText(log, 'attr:http.method'), 'GET');
-    assert.strictEqual(cellText(log, 'attr:n'), '3');
-    assert.strictEqual(cellText(log, 'attr:flag'), 'true');
-    assert.strictEqual(cellText(log, 'attr:absent'), '');
+    assert.strictEqual(cellText(log, 'time', false), new Date(1000).toISOString());
+    assert.strictEqual(cellText(log, 'observedTime', false), new Date(1000).toISOString());
+    assert.strictEqual(cellText(log, 'time', true), formatTimestamp(1000, true));
+    assert.strictEqual(cellText(log, 'observedTime', true), formatTimestamp(1000, true));
+    assert.strictEqual(cellText(log, 'level', false), 'ERROR', 'falls back to severityLabel');
+    assert.strictEqual(cellText(log, 'severityNumber', false), '17');
+    assert.strictEqual(cellText(log, 'message', false), '{"a":1}');
+    assert.strictEqual(cellText(log, 'traceId', false), 'abc');
+    assert.strictEqual(cellText(log, 'spanId', false), 'def');
+    assert.strictEqual(cellText(log, 'scope', false), 'my.scope');
+    assert.strictEqual(cellText(log, 'codeLocation', false), '/src/a.ts:12');
+    assert.strictEqual(cellText(log, 'function', false), 'run');
+    assert.strictEqual(cellText(log, 'attr:http.method', false), 'GET');
+    assert.strictEqual(cellText(log, 'attr:n', false), '3');
+    assert.strictEqual(cellText(log, 'attr:flag', false), 'true');
+    assert.strictEqual(cellText(log, 'attr:absent', false), '');
   });
 
   it('uses severityText when present and blanks missing optionals', () => {
     const plain = wl(2, { severityText: 'NOTICE', severityNumber: 10 });
-    assert.strictEqual(cellText(plain, 'level'), 'NOTICE');
-    assert.strictEqual(cellText(plain, 'observedTime'), '');
-    assert.strictEqual(cellText(plain, 'traceId'), '');
-    assert.strictEqual(cellText(plain, 'codeLocation'), '');
-    assert.strictEqual(cellText(plain, 'function'), '');
+    assert.strictEqual(cellText(plain, 'level', false), 'NOTICE');
+    assert.strictEqual(cellText(plain, 'observedTime', false), '');
+    assert.strictEqual(cellText(plain, 'traceId', false), '');
+    assert.strictEqual(cellText(plain, 'codeLocation', false), '');
+    assert.strictEqual(cellText(plain, 'function', false), '');
   });
 
   it('summarises every attribute key, not just the first eight', () => {

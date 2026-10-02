@@ -1,5 +1,6 @@
 // Host-side JSON shape for a single log record, shared by "Open In Editor" and log export.
 import { LogRecord } from '../store/model';
+import { formatTimestamp } from './format';
 
 export interface SerializedLog {
   time: string;
@@ -16,11 +17,11 @@ export interface SerializedLog {
   attributes: LogRecord['attrs'];
 }
 
-export function serializeLog(log: LogRecord): SerializedLog {
+export function serializeLog(log: LogRecord, useLocalTime: boolean): SerializedLog {
   return {
-    time: new Date(log.timeMs || 0).toISOString(),
+    time: formatTimestamp(log.timeMs || 0, useLocalTime),
     timeMs: log.timeMs || 0,
-    observedTime: log.observedTimeMs ? new Date(log.observedTimeMs).toISOString() : undefined,
+    observedTime: log.observedTimeMs ? formatTimestamp(log.observedTimeMs, useLocalTime) : undefined,
     observedTimeMs: log.observedTimeMs,
     severityNumber: log.severityNumber,
     severityText: log.severityText,

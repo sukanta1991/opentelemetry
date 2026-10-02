@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { OtelController } from '../controller';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
-import { getNonce, getUri, htmlShell } from './webviewUtil';
+import { getNonce, getUri, htmlShell, postTimeZone, timeZoneAttr, watchTimeZone } from './webviewUtil';
 
 export class MetricsPanel {
   private static panels = new Map<string, MetricsPanel>();
@@ -34,14 +34,17 @@ export class MetricsPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(this.panel.webview, controller.extensionUri, 'dist', 'webview', 'metricsChart.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneAttr());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
-      if (m?.type === 'ready') this.postData();
-      else if (m?.type === 'openSetting' && typeof m.key === 'string') {
+      if (m?.type === 'ready') {
+        postTimeZone(this.panel.webview);
+        this.postData();
+      } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
     }, null, this.disposables);
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }

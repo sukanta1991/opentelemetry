@@ -80,6 +80,8 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let localTime = document.body.dataset.useLocalTime !== 'false';
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(
@@ -228,7 +230,7 @@ function layoutColumns(): void {
 // --- Rows --------------------------------------------------------------------------------
 
 function cellHtml(r: TraceRow, id: TraceColumnId): string {
-  const text = esc(traceCellText(r, id));
+  const text = esc(traceCellText(r, id, localTime));
   switch (id) {
     case 'status':
       return r.errorCount
@@ -636,8 +638,18 @@ interface ListMessage {
   gone?: boolean;
 }
 
+interface TimeZoneMessage {
+  type: 'timeZone';
+  useLocalTime: boolean;
+}
+
 window.addEventListener('message', (e: MessageEvent) => {
-  const m = e.data as ListMessage | WaterfallMessage;
+  const m = e.data as ListMessage | TimeZoneMessage | WaterfallMessage;
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    localTime = m.useLocalTime;
+    paint();
+    return;
+  }
   if (m?.type === 'list' && Array.isArray(m.traces)) {
     traces = m.traces;
     total = m.total ?? m.traces.length;

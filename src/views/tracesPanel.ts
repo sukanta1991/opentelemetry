@@ -14,7 +14,16 @@ import {
   sanitizeAttrKeys,
   sanitizeQueryInput,
 } from './webview/traceView';
-import { COLUMN_TABLE_CSS, RANGE_ICON_SVG, getNonce, getUri, htmlShell } from './webviewUtil';
+import {
+  COLUMN_TABLE_CSS,
+  RANGE_ICON_SVG,
+  getNonce,
+  getUri,
+  htmlShell,
+  postTimeZone,
+  timeZoneAttr,
+  watchTimeZone,
+} from './webviewUtil';
 
 export interface TraceFocus {
   traceId: string;
@@ -93,9 +102,10 @@ export class TracesPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(panel.webview, controller.extensionUri, 'dist', 'webview', 'tracesTable.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneAttr());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.panel.onDidChangeViewState(
       () => {
         if (this.panel.active) TracesPanel.active = this;
@@ -199,6 +209,7 @@ export class TracesPanel {
       case 'ready':
         this.applyQuery(msg);
         this.ready = true;
+        postTimeZone(this.panel.webview);
         this.postList();
         if (this.pendingFocus) {
           const f = this.pendingFocus;

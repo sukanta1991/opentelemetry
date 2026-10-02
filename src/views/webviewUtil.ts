@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
+import { useLocalTime } from '../settings';
 
 export function getNonce(): string {
   return randomBytes(16).toString('base64url');
@@ -19,7 +20,8 @@ export function htmlShell(
   bodyHtml: string,
   scriptJs: string,
   styleCss: string,
-  scriptUris: vscode.Uri[] = []
+  scriptUris: vscode.Uri[] = [],
+  bodyAttrs = ''
 ): string {
   const csp = [
     `default-src 'none'`,
@@ -41,12 +43,28 @@ export function htmlShell(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>${baseCss}${styleCss}</style>
 </head>
-<body>
+<body${bodyAttrs ? ` ${bodyAttrs}` : ''}>
 ${bodyHtml}
 ${externalScripts}
 <script nonce="${nonce}">${scriptJs}</script>
 </body>
 </html>`;
+}
+
+// Rendered on <body> so a webview's first paint already uses the user's timezone choice.
+export function timeZoneAttr(): string {
+  return `data-use-local-time="${useLocalTime()}"`;
+}
+
+export function postTimeZone(webview: vscode.Webview): void {
+  void webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
+}
+
+// Re-sends the timezone choice whenever otel.useLocalTime changes.
+export function watchTimeZone(webview: vscode.Webview): vscode.Disposable {
+  return vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('otel.useLocalTime')) postTimeZone(webview);
+  });
 }
 
 const baseCss = `

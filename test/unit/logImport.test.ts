@@ -268,7 +268,7 @@ describe('import: round-trips an export', () => {
   });
 
   it('preserves every field through plain JSON', () => {
-    const out = parseLogFile(exportPlainJson([original], instance, 'all', []), 100);
+    const out = parseLogFile(exportPlainJson([original], instance, 'all', [], false), 100);
     const got = out.logs[0];
     assert.strictEqual(out.serviceName, 'svc');
     assert.strictEqual(out.serviceInstanceId, 'i1');
@@ -300,7 +300,7 @@ describe('import: round-trips an export', () => {
 
   it('round-trips a structured body', () => {
     const structured = log(2, { body: { a: 1, b: ['x'] } });
-    const out = parseLogFile(exportPlainJson([structured], instance, 'all', []), 100);
+    const out = parseLogFile(exportPlainJson([structured], instance, 'all', [], false), 100);
     assert.deepStrictEqual(out.logs[0].body, { a: 1, b: ['x'] });
   });
 
@@ -437,7 +437,7 @@ describe('import: JSON Lines', () => {
   it('leaves the single-document formats alone', () => {
     assert.strictEqual(parseLogFile(exportOtlpJson([log(1)], instance), 100).skipped, undefined);
     assert.strictEqual(
-      parseLogFile(exportPlainJson([log(1)], instance, 'all', []), 100).skipped,
+      parseLogFile(exportPlainJson([log(1)], instance, 'all', [], false), 100).skipped,
       undefined
     );
   });

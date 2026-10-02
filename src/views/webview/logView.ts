@@ -3,7 +3,7 @@
 // Must not import vscode, DOM, or uplot.
 
 import { AttributeValue, StoredLogRecord } from '../../store/model';
-import { severityLabel } from '../format';
+import { formatTimestamp, severityLabel } from '../format';
 import * as cols from './columnState';
 import {
   ATTRS_SUMMARY_MAX,
@@ -188,14 +188,14 @@ export function formatCodeLocation(l: WireLog): string {
 }
 
 // The display string for one cell. Also used as the CSV value for that column.
-export function cellText(l: WireLog, col: LogColumnId): string {
+export function cellText(l: WireLog, col: LogColumnId, useLocalTime: boolean): string {
   const key = parseAttrColumn(col);
   if (key !== undefined) return stringifyValue(l.attrs[key]);
   switch (col) {
     case 'time':
-      return new Date(logTimeMs(l)).toISOString();
+      return formatTimestamp(logTimeMs(l), useLocalTime);
     case 'observedTime':
-      return l.observedTimeMs ? new Date(l.observedTimeMs).toISOString() : '';
+      return l.observedTimeMs ? formatTimestamp(l.observedTimeMs, useLocalTime) : '';
     case 'level':
       return l.severityText || severityLabel(l.severityNumber);
     case 'severityNumber':
@@ -256,8 +256,8 @@ export interface LogHaystack {
 
 export function logHaystack(l: WireLog): LogHaystack {
   const attrs = summarizeAttrs(l.attrs).toLowerCase();
-  const msg = cellText(l, 'message').toLowerCase();
-  const sev = cellText(l, 'level').toLowerCase();
+  const msg = cellText(l, 'message', false).toLowerCase();
+  const sev = cellText(l, 'level', false).toLowerCase();
   return { hay: `${msg}\u0000${attrs}\u0000${sev}`, attrs };
 }
 

@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { formatTimestamp } from '../../src/views/format';
 import {
   TRACE_COLUMNS,
   isTraceColumnId,
@@ -82,14 +83,15 @@ describe('traceView sorting', () => {
 describe('traceView cell text', () => {
   it('formats each column', () => {
     const r = row('t', { startMs: 0, durationMs: 1500, errorCount: 1, services: ['a', 'b'], rootAttrs: { k: 'v' } });
-    assert.strictEqual(traceCellText(r, 'status'), 'Error');
-    assert.strictEqual(traceCellText(row('t'), 'status'), '');
-    assert.strictEqual(traceCellText(r, 'start'), '1970-01-01T00:00:00.000Z');
-    assert.strictEqual(traceCellText(r, 'duration'), '1.50s');
-    assert.strictEqual(traceCellText(r, 'services'), 'a, b');
-    assert.strictEqual(traceCellText(r, 'attr:k'), 'v');
-    assert.strictEqual(traceCellText(r, 'attr:missing'), '');
-    assert.strictEqual(traceCellText(r, 'logs'), '');
+    assert.strictEqual(traceCellText(r, 'status', false), 'Error');
+    assert.strictEqual(traceCellText(row('t'), 'status', false), '');
+    assert.strictEqual(traceCellText(r, 'start', false), '1970-01-01T00:00:00.000Z');
+    assert.strictEqual(traceCellText(r, 'start', true), formatTimestamp(r.startMs, true));
+    assert.strictEqual(traceCellText(r, 'duration', false), '1.50s');
+    assert.strictEqual(traceCellText(r, 'services', false), 'a, b');
+    assert.strictEqual(traceCellText(r, 'attr:k', false), 'v');
+    assert.strictEqual(traceCellText(r, 'attr:missing', false), '');
+    assert.strictEqual(traceCellText(r, 'logs', false), '');
   });
 });
 

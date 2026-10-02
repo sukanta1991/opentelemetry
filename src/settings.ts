@@ -31,6 +31,10 @@ export function readSettings(): OtelSettings {
   };
 }
 
+export function useLocalTime(): boolean {
+  return vscode.workspace.getConfiguration('otel').get<boolean>('useLocalTime', true);
+}
+
 export function readAiSettings(): AiSettings {
   const c = vscode.workspace.getConfiguration('otel');
   // Only the user-level value can enable AI access; workspace values are ignored even if present.

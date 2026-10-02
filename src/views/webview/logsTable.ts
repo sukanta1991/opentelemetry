@@ -1,6 +1,7 @@
 // Logs table webview app. Owns all DOM work for the logs panel; every value that reaches the
 // DOM goes through esc(). Pure view logic lives in logColumns.ts / logView.ts.
 
+import { formatTimestamp } from '../format';
 import {
   ATTR_KEY_LIMIT,
   GROUP_LABEL,
@@ -60,6 +61,8 @@ const OVERSCAN = 8;
 const DEFAULT_ROW_HEIGHT = 24;
 
 const state: LogsPanelState = loadLogsPanelState(vscode.getState());
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let localTime = document.body.dataset.useLocalTime !== 'false';
 
 // All retained records, ascending by seq (the order the host sends them in).
 let logs: WireLog[] = [];
@@ -213,7 +216,7 @@ function cellHtml(l: WireLog, id: LogColumnId): string {
     const on = selection.has(l.seq) ? ' checked' : '';
     return `<td class="selcol"><input type="checkbox" data-sel="${l.seq}" aria-label="Select row"${on} /></td>`;
   }
-  const text = esc(cellText(l, id));
+  const text = esc(cellText(l, id, localTime));
   if (parseAttrColumn(id) !== undefined) return `<td class="attrs"><div class="clamp">${text}</div></td>`;
   switch (id) {
     case 'time':
@@ -413,7 +416,7 @@ function updateRetentionHint(): void {
   const short = !correlate && needsMoreRetention(logs, state.range, evicted);
   retentionHint.hidden = !short;
   if (!short) return;
-  const oldest = new Date(oldestTime(logs)).toLocaleTimeString();
+  const oldest = formatTimestamp(oldestTime(logs), localTime);
   hintText.textContent =
     `${LOG_RANGE_LABEL[state.range]} was requested, but retention only holds ` +
     `${logs.length} logs (back to ${oldest}).`;
@@ -1125,7 +1128,14 @@ window.addEventListener('message', (e: MessageEvent) => {
     traceId?: unknown;
     spanId?: unknown;
     focusSeq?: unknown;
+    useLocalTime?: unknown;
   };
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    localTime = m.useLocalTime;
+    paint();
+    updateRetentionHint();
+    return;
+  }
   if (m?.type === 'correlate') {
     if (typeof m.traceId !== 'string' || !TRACE_ID.test(m.traceId)) return;
     const spanId = typeof m.spanId === 'string' && SPAN_ID.test(m.spanId) ? m.spanId : undefined;
