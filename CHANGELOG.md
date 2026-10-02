@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-03
+
 ### Added
 
 - Local timezone display for log and trace timestamps and metric chart axes. The `otel.useLocalTime` setting switches between local time and UTC; the default is local time.
