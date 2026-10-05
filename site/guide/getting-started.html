@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Getting started — OpenTelemetry for VS Code</title>
+  <meta name="description" content="Install OpenTelemetry for VS Code, start the embedded OTLP receiver and send telemetry from apps launched inside or outside VS Code.">
+  <link rel="canonical" href="https://sukanta1991.github.io/opentelemetry/guide/getting-started.html">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script src="../assets/js/theme-init.js"></script>
+  <script src="../assets/js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../" aria-label="OpenTelemetry for VS Code home">
+        <img src="../assets/img/icon.png" alt="" width="30" height="30">
+        <span>OpenTelemetry <small>for VS Code</small></span>
+      </a>
+      <nav class="nav" id="site-nav" aria-label="Main">
+        <a href="../#features">Features</a>
+        <a href="../#screenshots">Screenshots</a>
+        <a href="../#quick-start">Quick start</a>
+        <a href="../#ai">AI</a>
+        <a href="getting-started.html" aria-current="page">Docs</a>
+      </nav>
+      <div class="header-actions">
+        <a class="icon-btn" href="https://github.com/sukanta1991/opentelemetry" rel="noopener" aria-label="GitHub repository" title="GitHub repository">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        </a>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Toggle theme">
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <a class="btn btn-primary btn-sm" href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry" rel="noopener">Install</a>
+        <button class="icon-btn menu-toggle" type="button" aria-label="Open menu" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container docs">
+    <nav class="docs-nav" aria-label="Documentation">
+      <h4>Guide</h4>
+      <ul>
+        <li><a href="getting-started.html" aria-current="page">Getting started</a></li>
+        <li><a href="features.html">Features in depth</a></li>
+        <li><a href="query-syntax.html">Trace query syntax</a></li>
+        <li><a href="ai.html">Ask Copilot</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="reference.html">Commands &amp; settings</a></li>
+        <li><a href="privacy.html">Privacy &amp; data</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+
+    <main id="main" class="prose">
+      <h1>Getting started</h1>
+      <p class="lead">Install the extension, start the receiver, and point your app's OTLP exporter at it. Your instance, logs, traces and metrics appear as data arrives.</p>
+
+      <h2 id="install">1. Install</h2>
+      <p>Search “OpenTelemetry” in the Extensions view, <a href="vscode:extension/SukantaSaha.opentelemetry">open it directly in VS Code</a>, or install from a terminal:</p>
+      <pre><code>code --install-extension SukantaSaha.opentelemetry</code></pre>
+      <p>Requires VS Code 1.95 or later.</p>
+
+      <h2 id="start">2. Start the receiver</h2>
+      <p>Open the <strong>OpenTelemetry</strong> view in the Activity Bar and click <strong>Start receiver</strong> (or start it from the status bar item). The status bar then shows the active gRPC and HTTP ports.</p>
+      <div class="callout info">
+        <p>Want it running all the time? Set <code>otel.launchOnStartup</code> to <code>true</code>.</p>
+      </div>
+
+      <h2 id="send">3. Send telemetry</h2>
+
+      <h3 id="launched-from-vscode">Apps launched from VS Code</h3>
+      <p>When you run or debug an app from VS Code, the extension automatically injects the <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> environment variable so a configured OTLP exporter sends data to the receiver. You can disable this with the <code>otel.overwriteEnvVars</code> setting.</p>
+
+      <h3 id="outside-vscode">Apps running outside VS Code</h3>
+      <p>Point the exporter at the receiver yourself. Use the <strong>OpenTelemetry: Copy OTLP Endpoint</strong> or <strong>Copy OTLP Endpoint Environment Variable</strong> commands (or <strong>Show Instrumentation Snippet</strong> for a per-language example), then set:</p>
+      <pre><code>export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4317"
+export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"</code></pre>
+      <p><strong>OpenTelemetry: Open Terminal With OTLP Environment</strong> opens a new terminal with these already set.</p>
+      <p>You can also route data through an <a href="https://opentelemetry.io/docs/collector/" rel="noopener">OpenTelemetry Collector</a> by adding the receiver as an OTLP exporter target, so the same data reaches both your production backend and VS Code.</p>
+
+      <h3 id="snippets">Per-language snippets</h3>
+      <div class="snippet-box">
+        <div class="tabs left">
+          <div role="tablist" aria-label="Exporter configuration by language">
+            <button role="tab" id="tab-node" aria-controls="snip-node" aria-selected="true" type="button">Node.js</button>
+            <button role="tab" id="tab-py" aria-controls="snip-py" aria-selected="false" tabindex="-1" type="button">Python</button>
+            <button role="tab" id="tab-go" aria-controls="snip-go" aria-selected="false" tabindex="-1" type="button">Go</button>
+            <button role="tab" id="tab-net" aria-controls="snip-net" aria-selected="false" tabindex="-1" type="button">.NET</button>
+            <button role="tab" id="tab-java" aria-controls="snip-java" aria-selected="false" tabindex="-1" type="button">Java</button>
+          </div>
+          <div role="tabpanel" id="snip-node" aria-labelledby="tab-node">
+<pre><code><span class="tok-k">import</span> { NodeSDK } <span class="tok-k">from</span> <span class="tok-s">'@opentelemetry/sdk-node'</span>;
+<span class="tok-k">import</span> { OTLPTraceExporter } <span class="tok-k">from</span> <span class="tok-s">'@opentelemetry/exporter-trace-otlp-grpc'</span>;
+<span class="tok-k">const</span> sdk = <span class="tok-k">new</span> NodeSDK({
+  traceExporter: <span class="tok-k">new</span> OTLPTraceExporter({ url: <span class="tok-s">'http://127.0.0.1:4317'</span> }),
+});
+sdk.start();</code></pre>
+          </div>
+          <div role="tabpanel" id="snip-py" aria-labelledby="tab-py" hidden>
+<pre><code><span class="tok-k">from</span> opentelemetry.exporter.otlp.proto.grpc.trace_exporter <span class="tok-k">import</span> OTLPSpanExporter
+exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"</span>, insecure=<span class="tok-k">True</span>)</code></pre>
+          </div>
+          <div role="tabpanel" id="snip-go" aria-labelledby="tab-go" hidden>
+<pre><code>exporter, _ := otlptracegrpc.New(ctx,
+  otlptracegrpc.WithEndpointURL(<span class="tok-s">"http://127.0.0.1:4317"</span>),
+  otlptracegrpc.WithInsecure())</code></pre>
+          </div>
+          <div role="tabpanel" id="snip-net" aria-labelledby="tab-net" hidden>
+<pre><code>builder.Services.AddOpenTelemetry()
+  .WithTracing(t =&gt; t.AddOtlpExporter(o =&gt; o.Endpoint = <span class="tok-k">new</span> Uri(<span class="tok-s">"http://127.0.0.1:4317"</span>)));</code></pre>
+          </div>
+          <div role="tabpanel" id="snip-java" aria-labelledby="tab-java" hidden>
+<pre><code>-Dotel.exporter.otlp.endpoint=http://127.0.0.1:4317 -Dotel.exporter.otlp.protocol=grpc</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <h2 id="workflows">Common workflows</h2>
+
+      <h3 id="debug-failing-request">Debug a failing request</h3>
+      <ol>
+        <li>Start your app and generate some traffic.</li>
+        <li>Open <strong>Traces</strong> and set <strong>status</strong> to <em>Error</em> (or type <code>status=error dur&gt;200ms</code> in the query bar).</li>
+        <li>Select the failed trace to open its waterfall. Log markers on the bars show where logs were written; click one, or a span, to see its attributes, events, links and logs in the details pane.</li>
+        <li>Click <strong>View logs</strong> to open Logs filtered to that span (or <strong>View logs for trace</strong> for the whole request), then <strong>Navigate To Code</strong> to jump to the source.</li>
+      </ol>
+      <p>Going the other way works too: select a log and click <strong>View Trace</strong> (or click its Trace ID) to open the waterfall with the log's span selected. <strong>OpenTelemetry: Find Trace by ID</strong> accepts a trace ID or a W3C <code>traceparent</code> pasted from your terminal.</p>
+
+      <h3 id="share-bug">Share a reproduced bug (traces, logs and metrics)</h3>
+      <ol>
+        <li>Reproduce the problem with the receiver running.</li>
+        <li>Click <strong>Save Session…</strong> in the Instances view toolbar. To save less, use <strong>Save Instance…</strong> on an instance, or right-click a trace in the Traces panel and choose <strong>Export Trace…</strong> to get that trace and its correlated logs.</li>
+        <li>Your teammate runs <strong>OpenTelemetry: Load Session…</strong>. The file opens under <strong>Imported</strong>, and the waterfall, logs, metrics charts and service map all work. A loaded file is kept separate from live data and from other files, so the same trace never shows twice.</li>
+      </ol>
+      <p><strong>Open CI or Collector output:</strong> <strong>Load Session…</strong> also accepts a bare OTLP/JSON request, or the JSON Lines written by the OpenTelemetry Collector <code>file</code> exporter.</p>
+
+      <h3 id="share-logs">Share a log sample with a teammate</h3>
+      <ol>
+        <li>Open <strong>Logs</strong> and narrow the table with the search, level, attribute and time-range controls.</li>
+        <li>Optionally select specific rows (Cmd/Ctrl+click, or Shift+click for a range).</li>
+        <li>Click <strong>Export</strong>, pick a format and scope, and save the file.</li>
+        <li>Your teammate runs <strong>OpenTelemetry: Import Logs From File</strong> to open it under <strong>Imported</strong> — read-only, retention-exempt, and unaffected by <strong>Clear Collected Data</strong>.</li>
+      </ol>
+
+      <h3 id="vendor-logs">Bring in logs from another vendor</h3>
+      <ol>
+        <li>Export logs from your log platform as JSON Lines (one JSON object per line, <code>.jsonl</code>/<code>.ndjson</code>).</li>
+        <li>Run <strong>OpenTelemetry: Import Logs From File</strong> and pick the file.</li>
+        <li>Nested objects are flattened to dotted attribute keys, and the timestamp, severity, message, trace/span IDs, scope and service name are recognised from common field names. Epochs in seconds, milliseconds, microseconds or nanoseconds are detected automatically. Unreadable lines are skipped and counted rather than failing the whole import.</li>
+      </ol>
+
+      <h3 id="service-deps">Understand what a service talks to</h3>
+      <ol>
+        <li>Generate distributed traffic (HTTP calls, database queries, queue messages).</li>
+        <li>Open the <strong>Service Map</strong> to see services, databases and queues and how they connect.</li>
+      </ol>
+
+      <nav class="page-nav" aria-label="Pagination">
+        <a class="next" href="features.html"><small>Next</small>Features in depth →</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Sukanta Saha · <a href="https://github.com/sukanta1991/opentelemetry/blob/main/LICENSE" rel="noopener">MIT License</a></span>
+        <span><a href="https://github.com/sukanta1991/opentelemetry/edit/main/site/guide/getting-started.html" rel="noopener">Edit this page on GitHub</a></span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
