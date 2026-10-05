@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Cross-instance trace summaries for the trace list, cached until any part of the trace changes.
 
 import { AttributeValue, Span } from '../store/model';

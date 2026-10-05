@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { Application, Instance } from '../store/store';
 
 export function instanceLabel(inst: Instance): string {

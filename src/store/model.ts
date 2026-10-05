@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Internal normalized telemetry model. Both the gRPC and HTTP receivers decode
 // incoming OTLP payloads into these shapes (see decode.ts) before they reach the store.
 

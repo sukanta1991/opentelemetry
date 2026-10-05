@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Host-side JSON shape for a single log record, shared by "Open In Editor" and log export.
 import { LogRecord } from '../store/model';
 import { formatTimestamp } from './format';

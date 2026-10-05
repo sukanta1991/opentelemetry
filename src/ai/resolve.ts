@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Trace/span id resolution for AI tools. Synchronous so the store can't change mid-lookup.
 
 import { normalizeSpanId } from '../store/ids';

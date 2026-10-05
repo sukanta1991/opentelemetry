@@ -1,0 +1,9 @@
+OpenTelemetry for VS Code
+Copyright 2026 Sukanta Saha
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for details.
+
+This product includes the OpenTelemetry protocol definitions (proto/),
+Copyright 2019-2020 OpenTelemetry Authors, licensed under the Apache License,
+Version 2.0 (https://github.com/open-telemetry/opentelemetry-proto).

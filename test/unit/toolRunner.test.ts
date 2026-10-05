@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { AiSettings } from '../../src/ai/aiSettings';
 import { MAX_RESULT_CHARS } from '../../src/ai/limits';

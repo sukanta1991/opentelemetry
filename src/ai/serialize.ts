@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Bounded, JSON-safe copies of telemetry values and size-limited tool output. No vscode import.
 
 import {

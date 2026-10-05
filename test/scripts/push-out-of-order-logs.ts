@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';

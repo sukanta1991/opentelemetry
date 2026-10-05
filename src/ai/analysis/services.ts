@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_listServices: applications, instances and what each currently holds.
 
 import { Instance, TelemetryStore } from '../../store/store';

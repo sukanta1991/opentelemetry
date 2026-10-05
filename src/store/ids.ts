@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Canonical trace/span id form: lowercase hex, with the W3C all-zero "invalid" id treated as absent.
 
 const ZERO = /^0+$/;

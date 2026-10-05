@@ -70,4 +70,4 @@ Maintainers: see [`PUBLISHING.md`](./PUBLISHING.md) for the Marketplace release 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](./LICENSE).
+[Apache License 2.0](./LICENSE), as described in section 5 of the license, without any additional terms or conditions.

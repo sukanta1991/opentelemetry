@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { genAiSummary } from '../../src/ai/analysis/genai';
 import { createRedactor } from '../../src/ai/redact';

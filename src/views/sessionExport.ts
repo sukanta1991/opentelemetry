@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Builds OTLP/JSON session files from the store. No vscode import so it stays unit-testable.
 
 import { byScope, encodeLog, encodeMetric, encodeResource, encodeSpan } from '../store/encode';

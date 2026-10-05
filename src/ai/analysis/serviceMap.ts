@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_getServiceMap: service dependency graph with call and error counts.
 
 import { TelemetryStore } from '../../store/store';

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-05
+
+First stable release. No functional changes from 0.6.1. From now on, settings, commands and language model tool names follow semantic versioning: breaking changes only in a new major version.
+
+### Changed
+
+- **License changed from MIT to the Apache License 2.0**, with the consent of all contributors. A `NOTICE` file credits the bundled OpenTelemetry protocol definitions.
+- Contributions are now accepted under the Apache License 2.0 (section 5); see `CONTRIBUTING.md`.
+
+## [0.6.1] - 2026-10-05
+
+### Added
+
+- Project website with a user guide (getting started, features, query syntax, AI, privacy, reference and troubleshooting) at <https://sukanta1991.github.io/opentelemetry/>. The Marketplace **Homepage** link now points to it.
+
 ## [0.6.0] - 2026-10-03
 
 ### Added

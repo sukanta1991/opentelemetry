@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_getTrace: one trace explained — critical path, self-time, errors, services and logs.
 
 import { TelemetryStore } from '../../store/store';

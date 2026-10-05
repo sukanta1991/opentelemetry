@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // OTLP/gRPC server. Uses @grpc/proto-loader against the vendored opentelemetry-proto files.
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';

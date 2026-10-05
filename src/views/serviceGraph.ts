@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Service dependency graph derived from spans. Shared by the service map panel and AI tools.
 // No vscode import.
 

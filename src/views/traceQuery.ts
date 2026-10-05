@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Trace list query engine: the toolbar controls and the query bar compile to one TraceQuery.
 // Span-level predicates must all hold on the same span. User input never becomes a regex.
 

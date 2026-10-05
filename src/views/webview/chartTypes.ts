@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure, framework-agnostic chart-type registry shared by the extension host,
 // the webview bundle, and unit tests. Must not import vscode, uplot, or DOM.
 import { MetricType } from '../../store/model';

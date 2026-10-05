@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Registers the @otel chat participant. The loop, history handling and messages live in chatLoop.ts.
 
 import * as vscode from 'vscode';

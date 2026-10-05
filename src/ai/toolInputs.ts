@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Validates tool input from the model. Returns { value } or an { error } the model can act on.
 // Strings are trimmed and capped, numbers clamped, enums checked; unknown keys are ignored.
 

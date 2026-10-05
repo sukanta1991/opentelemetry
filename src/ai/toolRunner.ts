@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Tool pipeline without vscode: validate input, run the analysis, redact, size-limit. Also builds
 // the confirmation text. src/ai/tools.ts adapts this to the VS Code language model tool API.
 

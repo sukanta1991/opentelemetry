@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Instructions and slash-command templates for the @otel participant. No vscode import.
 // The language model API has no system role, so INSTRUCTIONS is sent as the first user message.
 

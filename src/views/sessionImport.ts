@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Parses saved sessions and plain OTLP/JSON (single request or Collector file-exporter JSON Lines).
 // Input is untrusted: structure, record counts and attribute counts are checked before decoding.
 

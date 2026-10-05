@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_searchTraces: filter traces with the trace query syntax, then list or group them.
 
 import { TelemetryStore } from '../../store/store';

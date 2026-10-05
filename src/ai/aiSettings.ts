@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Validation for the otel.ai.* settings. No vscode import, so it can be unit-tested.
 
 import { DEFAULT_MAX_ITEMS, HARD_MAX_ITEMS } from './limits';

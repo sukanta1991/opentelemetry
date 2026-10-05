@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Fixed-capacity ring buffer. Oldest entries are dropped when capacity is exceeded.
 // A capacity <= 0 means unbounded (used by imported instances, which never grow).
 export class RingBuffer<T> {

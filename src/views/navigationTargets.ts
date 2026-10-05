@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure target resolution for cross-panel navigation. No vscode import so it can be unit-tested.
 
 import { normalizeSpanId, normalizeTraceId } from '../store/ids';

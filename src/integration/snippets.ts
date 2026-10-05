@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Per-language OTLP instrumentation snippets shown via the "onboard external app" flow.
 export interface Snippet {
   language: string;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { TelemetryStore } from '../../src/store/store';
 import { LogRecord, Metric, ResourceMetrics, Span } from '../../src/store/model';

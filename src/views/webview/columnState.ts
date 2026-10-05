@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Generic column-state reducers shared by the logs and traces tables. Pure: no vscode or DOM.
 
 export interface ColumnState<Id extends string = string> {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_genAiSummary: time split, token usage and tool calls of one AI-agent trace.
 // Prompt/completion content is never returned, only its length.
 

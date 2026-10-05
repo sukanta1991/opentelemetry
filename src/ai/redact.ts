@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Masks secrets in telemetry before it reaches a language model. Always returns deep copies,
 // never mutates store-owned objects. Patterns are fixed and bounded; no user-supplied regex.
 

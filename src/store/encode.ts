@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Encodes the internal model back into OTLP/JSON shapes; the inverse of decode.ts.
 // No vscode import so it stays unit-testable.
 

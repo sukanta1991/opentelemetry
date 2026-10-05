@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Column registry for the traces table. Pure: no vscode or DOM imports.
 
 import { AttrColumnId, isAttrColumn, parseAttrColumn } from './columnState';

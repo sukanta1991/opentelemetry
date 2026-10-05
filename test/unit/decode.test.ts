@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { decodeLogs, decodeMetrics, decodeTraces, toHexId } from '../../src/store/decode';
 

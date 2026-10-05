@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Sends correlated traces and logs over OTLP/HTTP JSON for manually exercising trace ↔ log
 // navigation. Usage: npx ts-node test/scripts/push-correlated.ts [baseUrl] [--bulk]
 import * as http from 'http';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Sends a GenAI agent trace (OpenTelemetry gen_ai semantic conventions) plus correlated logs over
 // OTLP/HTTP JSON, for manually testing `@otel /agent`. Usage: npx ts-node test/scripts/push-genai.ts [baseUrl]
 import * as http from 'http';
