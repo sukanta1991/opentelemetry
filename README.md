@@ -238,7 +238,7 @@ This extension doesn't replace a production observability platform. It is built 
 | Metrics | Yes | Span-derived only (Monitor tab) | Yes (Prometheus) |
 | Service map | Yes | Yes | Yes (Tempo service graphs) |
 | Open a span's or log's source line in your editor | Yes | No | No |
-| Persistent storage | No, in memory only | Yes | Yes |
+| Automatic persistent storage | No; live data is in memory, with manual export/import available | Yes | Yes |
 | Production scale and long retention | No | Yes | Yes |
 | Alerting and shared dashboards | No | No | Yes |
 
