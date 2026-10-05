@@ -858,7 +858,9 @@
     "push:genai": "ts-node test/scripts/push-genai.ts",
     "test": "npm run build && npm run test:unit && npm run test:smoke && npm run test:activate",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "site:build": "rm -rf _site && mkdir -p _site/assets/img && cp -R site/. _site/ && cp -R images/screenshots images/icon.png _site/assets/img/",
+    "site:preview": "npm run site:build && python3 -m http.server 8080 --bind 127.0.0.1 -d _site"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.9",

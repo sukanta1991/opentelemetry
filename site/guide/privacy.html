@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Privacy &amp; data handling — OpenTelemetry for VS Code</title>
+  <meta name="description" content="How OpenTelemetry for VS Code handles telemetry: localhost only, in memory, and redacted before any optional AI call.">
+  <link rel="canonical" href="https://sukanta1991.github.io/opentelemetry/guide/privacy.html">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script src="../assets/js/theme-init.js"></script>
+  <script src="../assets/js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../" aria-label="OpenTelemetry for VS Code home">
+        <img src="../assets/img/icon.png" alt="" width="30" height="30">
+        <span>OpenTelemetry <small>for VS Code</small></span>
+      </a>
+      <nav class="nav" id="site-nav" aria-label="Main">
+        <a href="../#features">Features</a>
+        <a href="../#screenshots">Screenshots</a>
+        <a href="../#quick-start">Quick start</a>
+        <a href="../#ai">AI</a>
+        <a href="getting-started.html" aria-current="page">Docs</a>
+      </nav>
+      <div class="header-actions">
+        <a class="icon-btn" href="https://github.com/sukanta1991/opentelemetry" rel="noopener" aria-label="GitHub repository" title="GitHub repository">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        </a>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Toggle theme">
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <a class="btn btn-primary btn-sm" href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry" rel="noopener">Install</a>
+        <button class="icon-btn menu-toggle" type="button" aria-label="Open menu" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container docs">
+    <nav class="docs-nav" aria-label="Documentation">
+      <h4>Guide</h4>
+      <ul>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="features.html">Features in depth</a></li>
+        <li><a href="query-syntax.html">Trace query syntax</a></li>
+        <li><a href="ai.html">Ask Copilot</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="reference.html">Commands &amp; settings</a></li>
+        <li><a href="privacy.html" aria-current="page">Privacy &amp; data</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+
+    <main id="main" class="prose">
+      <h1>Privacy &amp; data handling</h1>
+      <p class="lead">The extension is built for local development. It has no backend and makes no outbound network calls of its own. Its only network activity is the OTLP receiver listening for your apps.</p>
+
+      <pre><code>your app ── OTLP ──▶ 127.0.0.1:4317 (gRPC) / 127.0.0.1:4318 (HTTP) ──▶ in-memory store in VS Code</code></pre>
+
+      <h2 id="telemetry">Telemetry</h2>
+      <ul>
+        <li>The receiver binds to <code>127.0.0.1</code> by default. Setting <code>otel.host</code> to another address exposes your telemetry to that network.</li>
+        <li>Live telemetry is held in memory only. It is capped by the <code>otel.retention.*</code> settings and dropped when the receiver restarts or you run <strong>Clear Collected Data</strong>.</li>
+        <li>Telemetry is never written to disk unless you export it yourself.</li>
+      </ul>
+
+      <h2 id="ai">AI features (optional)</h2>
+      <p>AI access is off until you enable the <code>otel.ai.enabled</code> user setting. When you ask a question:</p>
+      <pre><code>@otel or an agent-mode request asks for an otel_* tool
+        │  VS Code asks you to confirm the call (or you chose "always allow")
+        ▼
+read-only query over the in-memory telemetry, capped in size
+        │
+        ▼
+redaction: secrets masked, AI prompt/completion text removed
+        │
+        ▼
+the chat model you selected in VS Code ──▶ answer shown in chat</code></pre>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">The <code>otel_*</code> tools can</th><th scope="col">The <code>otel_*</code> tools cannot</th></tr></thead>
+          <tbody>
+            <tr><td class="yes">Read the telemetry the receiver holds in memory</td><td>Read, create or edit workspace files</td></tr>
+            <tr><td class="yes">Read the <code>otel.ai.*</code> settings</td><td>Run commands, tasks or terminals</td></tr>
+            <tr><td></td><td>Read environment variables</td></tr>
+            <tr><td></td><td>Make network requests</td></tr>
+            <tr><td></td><td>Change or delete telemetry</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Buttons in <code>@otel</code> answers only open a trace, its logs, or a source line, and only when you click them. Source lines go through the same path checks as <strong>Navigate To Code</strong>. In agent mode, any other tools the agent has — such as file edits or the terminal — come from VS Code or other extensions, not from this one.</p>
+
+      <h3 id="opt-in">Opt-in and confirmed</h3>
+      <p>Nothing is read until you enable <code>otel.ai.enabled</code>, and VS Code asks before each tool call. You can choose to always allow a tool. A workspace <code>settings.json</code> cannot turn it on.</p>
+
+      <h3 id="model">Your model, your choice</h3>
+      <p>Results go only to the language model selected in the chat model picker, including bring-your-own-key and local models (for example Ollama) configured in VS Code. The extension stores no API keys.</p>
+
+      <h3 id="redaction">Redacted first</h3>
+      <p>Before anything is sent:</p>
+      <ul>
+        <li>Values of keys such as <code>authorization</code>, <code>cookie</code>, <code>password</code>, <code>token</code>, <code>secret</code>, API keys and connection strings are masked.</li>
+        <li>Bearer/Basic credentials, JWTs, AWS, GitHub, Slack and <code>sk-</code> keys, private keys, URL passwords and <code>password=</code> pairs are masked in any text.</li>
+        <li>You can add keys with <code>otel.ai.redactAttributeKeys</code>, but never remove the built-in ones.</li>
+        <li>Prompt and completion text from AI-agent spans (<code>gen_ai.prompt</code>, <code>gen_ai.input.messages</code>, …) is never sent, only its length.</li>
+      </ul>
+
+      <h3 id="bounded">Bounded</h3>
+      <p>Each result is capped at <code>otel.ai.maxResultItems</code> items and 24,000 characters.</p>
+
+      <h3 id="transparent">Transparent</h3>
+      <p>Open the <strong>OpenTelemetry AI</strong> output channel and set its log level to <strong>Debug</strong> (gear icon → Set Log Level) to see the exact text sent for every call.</p>
+
+      <h3 id="untrusted">Telemetry is treated as untrusted</h3>
+      <p>The model is told never to follow instructions found in telemetry, and buttons are built only from IDs the extension validated, never from text the model wrote.</p>
+
+      <h2 id="security">Reporting a vulnerability</h2>
+      <p>Please report security issues privately as described in <a href="https://github.com/sukanta1991/opentelemetry/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a>, not in a public issue.</p>
+
+      <nav class="page-nav" aria-label="Pagination">
+        <a href="reference.html"><small>Previous</small>← Commands &amp; settings</a>
+        <a class="next" href="troubleshooting.html"><small>Next</small>Troubleshooting →</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Sukanta Saha · <a href="https://github.com/sukanta1991/opentelemetry/blob/main/LICENSE" rel="noopener">MIT License</a></span>
+        <span><a href="https://github.com/sukanta1991/opentelemetry/edit/main/site/guide/privacy.html" rel="noopener">Edit this page on GitHub</a></span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

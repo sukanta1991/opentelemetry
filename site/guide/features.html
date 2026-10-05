@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Features in depth — OpenTelemetry for VS Code</title>
+  <meta name="description" content="Everything the Logs, Traces, Metrics and Service Map panels in OpenTelemetry for VS Code can do.">
+  <link rel="canonical" href="https://sukanta1991.github.io/opentelemetry/guide/features.html">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script src="../assets/js/theme-init.js"></script>
+  <script src="../assets/js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../" aria-label="OpenTelemetry for VS Code home">
+        <img src="../assets/img/icon.png" alt="" width="30" height="30">
+        <span>OpenTelemetry <small>for VS Code</small></span>
+      </a>
+      <nav class="nav" id="site-nav" aria-label="Main">
+        <a href="../#features">Features</a>
+        <a href="../#screenshots">Screenshots</a>
+        <a href="../#quick-start">Quick start</a>
+        <a href="../#ai">AI</a>
+        <a href="getting-started.html" aria-current="page">Docs</a>
+      </nav>
+      <div class="header-actions">
+        <a class="icon-btn" href="https://github.com/sukanta1991/opentelemetry" rel="noopener" aria-label="GitHub repository" title="GitHub repository">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        </a>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Toggle theme">
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <a class="btn btn-primary btn-sm" href="https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry" rel="noopener">Install</a>
+        <button class="icon-btn menu-toggle" type="button" aria-label="Open menu" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container docs">
+    <nav class="docs-nav" aria-label="Documentation">
+      <h4>Guide</h4>
+      <ul>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="features.html" aria-current="page">Features in depth</a></li>
+        <li><a href="query-syntax.html">Trace query syntax</a></li>
+        <li><a href="ai.html">Ask Copilot</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="reference.html">Commands &amp; settings</a></li>
+        <li><a href="privacy.html">Privacy &amp; data</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+      </ul>
+    </nav>
+
+    <main id="main" class="prose">
+      <h1>Features in depth</h1>
+      <p class="lead">A tour of every panel. All panels follow your VS Code theme, and timestamps use your local time zone unless you set <code>otel.useLocalTime</code> to <code>false</code>.</p>
+
+      <h2 id="receiver">Embedded OTLP receiver</h2>
+      <ul>
+        <li>Accepts <strong>OTLP/gRPC</strong> (default <code>4317</code>) and <strong>OTLP/HTTP</strong> (protobuf + JSON, default <code>4318</code>), bound to <code>127.0.0.1</code>.</li>
+        <li>The endpoint is injected automatically into apps you run or debug from VS Code.</li>
+        <li>Copy the endpoint, environment variables, or a per-language snippet for apps run elsewhere.</li>
+        <li>An <strong>Instances</strong> tree groups applications by <code>service.name</code>, each with its own instances and inline <strong>Logs / Traces / Metrics</strong> icons.</li>
+        <li>Works with any OTLP SDK: Java, .NET, Go, Node.js, Python, Rust and others.</li>
+      </ul>
+
+      <h2 id="traces">Traces &amp; spans</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Traces</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/trace.png" width="1998" height="1702" loading="lazy" alt="Trace list, request waterfall and span details">
+        </div>
+        <figcaption>Trace list, waterfall and span details.</figcaption>
+      </figure>
+      <p>A virtualized, sortable trace list with a column picker (including root-span attributes as columns) and the same time-range picker as Logs.</p>
+      <ul>
+        <li><strong>Filters</strong> for service, span name, status, kind, span attributes (<code>key</code> / <code>key=value</code>), min/max duration and trace ID, plus an <strong>advanced query bar</strong> (see <a href="query-syntax.html">Trace query syntax</a>). Span conditions must all hold on the <strong>same span</strong>.</li>
+        <li>The <strong>waterfall</strong> merges distributed spans from every instance by trace ID and shows each span's <strong>logs as markers</strong> on its bar — coloured by severity, grouped when dense. Logs outside the span's time are pinned to its edge and flagged. Logs with the trace ID but no known span appear in a trace-level strip. Large traces are virtualized.</li>
+        <li>The <strong>span details</strong> pane shows status, IDs, attributes, events (including exception stack traces), <strong>links</strong> (open a linked trace, then <strong>Back</strong>), the span's <strong>logs</strong> (each with <strong>Open in Logs</strong>), and the <strong>resource</strong>. <strong>View logs</strong> opens Logs filtered to the span, and <strong>Navigate To Code</strong> appears when the span has <code>code.*</code> attributes.</li>
+        <li>The open waterfall refreshes live as spans and logs arrive.</li>
+        <li><strong>Find Trace by ID</strong> accepts a trace ID or a W3C <code>traceparent</code>.</li>
+      </ul>
+
+      <h2 id="logs">Logs</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Logs</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/logs-columns.png" width="2928" height="1512" loading="lazy" alt="Logs panel with the column picker">
+        </div>
+        <figcaption>The Logs panel with the column picker open.</figcaption>
+      </figure>
+      <p>A virtualized table that stays responsive at full retention.</p>
+      <ul>
+        <li><strong>Search and filter</strong> by text, minimum level and <code>attr=value</code>.</li>
+        <li><strong>Time range picker</strong> (1 min … 2 hours, or <strong>All logs</strong>) anchored to the newest log received, so rows stay visible after the emitting app stops. A hint appears when retention holds less history than the selected window.</li>
+        <li><strong>Columns</strong> button to choose which of Time, Observed Time, Level, Severity #, Message, Attributes, Scope, Trace ID, Span ID, Code Location and Function are shown — plus any <strong>individual log attribute</strong> promoted to its own sortable column. Drag to reorder, search the list, or reset to defaults.</li>
+        <li><strong>Resizable columns</strong> — drag any edge, or double-click it to fit the content.</li>
+        <li><strong>Row height</strong> modes: Raw (full wrap), 1 line, 2 lines and Condensed.</li>
+        <li><strong>Sorting</strong> by Time, Observed Time, Severity or an attribute column. Newest first by default.</li>
+        <li><strong>Pause</strong> freezes the view while logs keep arriving in the background, showing how many are queued.</li>
+        <li><strong>Multi-select</strong> with Cmd/Ctrl+click, Shift+click ranges and Cmd/Ctrl+A, with an optional selection checkbox column.</li>
+        <li><strong>Export</strong> to OTLP/JSON, plain JSON or CSV — choosing the visible columns or all attributes, a record count, and whether to export the filtered, all or selected rows.</li>
+        <li><strong>Import</strong> OTLP/JSON, JSON Lines (<code>.jsonl</code>/<code>.ndjson</code>) or previously exported plain JSON as a read-only instance under the <strong>Imported</strong> node, kept separate from live telemetry.</li>
+        <li><strong>Navigate To Code</strong> jumps to the source line, and <strong>Open In Editor</strong> shows a log as JSON.</li>
+        <li><strong>View Trace</strong> (or click a Trace ID / Span ID cell) opens the log's trace waterfall with its span selected. Arriving from a trace filters Logs to that trace or span — shown as a chip you can clear — and ignores the time range so older correlated logs stay visible.</li>
+      </ul>
+
+      <h2 id="metrics">Metrics</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Metrics</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/metrics-graphs.png" width="2154" height="1252" loading="lazy" alt="Metrics graph view">
+        </div>
+        <figcaption>The Graph view with per-graph chart type, Over time and Series controls.</figcaption>
+      </figure>
+      <p>Per-instance gauges, counters/sums, histograms and summaries with a <strong>Table | Graph</strong> toggle. The Graph view plots time-series history built up as telemetry streams in.</p>
+      <ul>
+        <li><strong>Gauges &amp; sums</strong> → multi-series line charts (one line per attribute set) on a shared time axis.</li>
+        <li><strong>Summaries</strong> → a line per quantile.</li>
+        <li><strong>Histograms</strong> → bar charts of the latest bucket distribution.</li>
+        <li>A <strong>per-graph chart-type dropdown</strong> offers views scoped to each metric's type — counters and updown-counters add <strong>rate</strong>, <strong>stacked-area</strong>, <strong>area</strong> and <strong>bar</strong> (for updown-counters, <code>rate</code> keeps real increases and decreases); gauges add a single-value <strong>gauge</strong> readout; summaries add a <strong>percentile</strong> view; every type offers <strong>table</strong>. The selection is remembered per metric.</li>
+        <li>An <strong>Over time</strong> dropdown aggregates each series into fixed-width time buckets (avg / min / max / sum / last / count / std-dev / P50 / P90 / P95 / P99); <strong>Raw</strong> plots every sample. Multi-series scalar metrics also get a <strong>Series</strong> dropdown (sum / avg / min / max / P95 across label sets).</li>
+        <li>A <strong>time-range picker</strong> (1 min … 2 hours) applies to every graph at once, alongside a <strong>Step</strong> control for the aggregation bucket width. <strong>Auto</strong> follows the range.</li>
+        <li>Charts use VS Code theme colours, abbreviate large axis values (e.g. <code>270k</code>, <code>2.8M</code>), and truncate long series labels with a full-text tooltip. History depth is bounded by <code>otel.retention.maxMetricPointsPerSeries</code>.</li>
+      </ul>
+      <div class="callout">
+        <p>The aggregation, time-range and step controls are <strong>experimental</strong> while feedback is gathered — defaults and behaviour may change. Please <a href="https://github.com/sukanta1991/opentelemetry/issues" rel="noopener">report anything surprising</a>.</p>
+      </div>
+
+      <h2 id="service-map">Service map</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Service Map</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/service-map.png" width="2164" height="1708" loading="lazy" alt="Service map">
+        </div>
+      </figure>
+      <p>Services, databases, queues and external dependencies inferred from spans. Open it from <strong>OpenTelemetry: Open Service Map</strong>, or on an imported file to see just that file's services.</p>
+
+      <h2 id="sessions">Sessions, import &amp; export</h2>
+      <ul>
+        <li><strong>Save Session…</strong> writes all traces, logs and metrics (including metric history) to one <code>.otel.json</code> file. Each section is a standard OTLP <code>Export*ServiceRequest</code>.</li>
+        <li><strong>Save Instance…</strong> saves one instance; <strong>Export Trace…</strong> (right-click a trace) saves one trace with its correlated logs.</li>
+        <li><strong>Load Session…</strong> accepts saved sessions, bare OTLP/JSON requests and OpenTelemetry Collector file-exporter JSON Lines.</li>
+        <li>Loaded files appear under <strong>Imported</strong>, isolated from live data and from each other, and survive <strong>Clear Collected Data</strong>.</li>
+        <li>Imports are bounded by <code>otel.import.maxFileSize</code> and <code>otel.import.maxRecords</code>.</li>
+      </ul>
+
+      <h2 id="code-nav">Navigate to code</h2>
+      <p>Spans and logs with source-location attributes (<code>code.filepath</code> / <code>code.lineno</code>, or the newer <code>code.file.path</code> / <code>code.line.number</code>) get a <strong>Navigate To Code</strong> action. Paths are resolved inside your workspace folders; when only a file name matches, the closest path wins (or you pick from a list). An absolute path outside the workspace asks for confirmation before it opens.</p>
+
+      <h2 id="ai">Ask Copilot <span class="badge">opt-in</span></h2>
+      <p>The <code>@otel</code> chat participant and nine <code>otel_*</code> tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See <a href="ai.html">Ask Copilot</a>.</p>
+
+      <nav class="page-nav" aria-label="Pagination">
+        <a href="getting-started.html"><small>Previous</small>← Getting started</a>
+        <a class="next" href="query-syntax.html"><small>Next</small>Trace query syntax →</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Sukanta Saha · <a href="https://github.com/sukanta1991/opentelemetry/blob/main/LICENSE" rel="noopener">MIT License</a></span>
+        <span><a href="https://github.com/sukanta1991/opentelemetry/edit/main/site/guide/features.html" rel="noopener">Edit this page on GitHub</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" aria-label="Screenshot preview">
+    <button class="icon-btn" type="button" aria-label="Close preview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <img src="data:," alt="">
+    <p></p>
+  </dialog>
+</body>
+</html>
