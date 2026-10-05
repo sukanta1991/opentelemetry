@@ -21,7 +21,7 @@
   "bugs": {
     "url": "https://github.com/sukanta1991/opentelemetry/issues"
   },
-  "homepage": "https://github.com/sukanta1991/opentelemetry#readme",
+  "homepage": "https://sukanta1991.github.io/opentelemetry/",
   "qna": "marketplace",
   "engines": {
     "vscode": "^1.95.0"
