@@ -463,4 +463,6 @@ CI type-checks, lints, and runs the unit, receiver smoke, and activation tests o
 
 ## License
 
-[Apache License 2.0](./LICENSE) © Sukanta Saha. See [NOTICE](./NOTICE) for attributions.
+[Apache License 2.0](./LICENSE) © The OpenTelemetry for VS Code Authors. See [NOTICE](./NOTICE) for attributions.
+
+Versions before 1.0.0 were released under the MIT License.
