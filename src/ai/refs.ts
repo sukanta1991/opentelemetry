@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Links from tool results back to telemetry, and the chat buttons built from them.
 // Button arguments come only from validated refs, never from text the model wrote.
 

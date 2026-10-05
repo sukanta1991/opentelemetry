@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Logs table webview app. Owns all DOM work for the logs panel; every value that reaches the
 // DOM goes through esc(). Pure view logic lives in logColumns.ts / logView.ts.
 

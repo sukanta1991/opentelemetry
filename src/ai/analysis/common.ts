@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Shared helpers for the analysis functions. No vscode import.
 
 import { CodeLocation, KeyValueMap } from '../../store/model';

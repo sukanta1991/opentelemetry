@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { KeyValueMap, Span, SpanKind, StatusCode } from '../store/model';
 
 export interface AttrEntry {

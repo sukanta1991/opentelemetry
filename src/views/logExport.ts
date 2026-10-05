@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure log serializers for export. No vscode/DOM imports so they stay unit-testable.
 
 import { byScope, encodeLog, encodeResource, toAnyValue, toKeyValues } from '../store/encode';

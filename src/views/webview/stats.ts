@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure statistics helpers for the metrics graph (reduce-over-time, time bucketing,
 // reduce-across-series, and histogram percentile/mean). Must not import vscode, uplot, or DOM.
 import { AggKind, ReduceKind } from './chartTypes';

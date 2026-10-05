@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Traces panel webview app: virtualized trace list with filters, column picker and the span
 // waterfall. Every value that reaches the DOM goes through esc() or textContent.
 

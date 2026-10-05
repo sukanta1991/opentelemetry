@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Groups a span's logs into bar markers so dense spans stay readable. Pure: no DOM.
 
 export interface MarkerLog {

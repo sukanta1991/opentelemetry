@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure view-model helpers for the logs table: density, time range, sorting, cell text, and
 // the persisted panel state. Shared by the extension host, the webview bundle, and unit tests.
 // Must not import vscode, DOM, or uplot.

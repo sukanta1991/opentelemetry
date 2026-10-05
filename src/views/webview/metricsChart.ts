@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Bundled webview app for the Metrics panel. Built by esbuild into dist/webview/metricsChart.js
 // and loaded by MetricsPanel. Owns the toolbar, table view, and uPlot graph view.
 import uPlot from 'uplot';

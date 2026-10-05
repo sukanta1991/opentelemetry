@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { bucketLogMarkers, severityBucket } from '../../src/views/webview/waterfallMarkers';
 

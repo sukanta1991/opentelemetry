@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_findSpans: span-level search across the newest traces, with self-time and grouping.
 
 import { TaggedSpan, TelemetryStore } from '../../store/store';

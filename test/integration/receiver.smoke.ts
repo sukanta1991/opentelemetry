@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // End-to-end smoke test for the OTLP receiver: sends OTLP over HTTP (protobuf + JSON)
 // and gRPC, then asserts the telemetry store is populated. Run with: npx ts-node
 import * as assert from 'assert';

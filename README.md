@@ -4,9 +4,9 @@
 
 Capture OTLP logs, traces, and metrics with a receiver built into the editor. There is no Jaeger, Zipkin, or OpenTelemetry Collector to run. Inspect requests next to your code, jump from a span or log to its source line, see how your services connect and, if you turn it on, ask Copilot to investigate. It works whether your app is launched from VS Code or runs elsewhere, and the data stays in memory on your machine.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.6.1-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v1.0.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 
 ![OpenTelemetry for VS Code demo: logs, traces, metrics, and service map in the editor](images/screenshots/OpenTelemetry_0_6_0.gif)
 
@@ -463,4 +463,4 @@ CI type-checks, lints, and runs the unit, receiver smoke, and activation tests o
 
 ## License
 
-[MIT](./LICENSE) © Sukanta Saha
+[Apache License 2.0](./LICENSE) © Sukanta Saha. See [NOTICE](./NOTICE) for attributions.

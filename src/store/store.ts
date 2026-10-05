@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // In-memory telemetry store. Framework-agnostic (no vscode import) so it can be unit-tested.
 // Holds applications -> instances -> {logs, traces, metrics}. Data is cleared on receiver
 // restart. Emits debounced change events for the UI.

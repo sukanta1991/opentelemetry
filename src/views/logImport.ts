@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure parsers for imported log files. Input is untrusted, so every field is validated and
 // the first violation aborts the import rather than yielding a silently partial result.
 

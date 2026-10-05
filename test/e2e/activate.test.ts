@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Activation integration test: loads the real bundled dist/extension.js against a
 // lightweight `vscode` API shim and asserts the extension wires up and starts the
 // receiver. Run with: npx ts-node test/e2e/activate.test.ts

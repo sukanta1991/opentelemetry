@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Registers the otel_* language model tools. The pipeline itself lives in toolRunner.ts.
 
 import * as vscode from 'vscode';

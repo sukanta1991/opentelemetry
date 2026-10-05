@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // OTLP/HTTP server. Accepts POST /v1/{traces,logs,metrics} as protobuf or JSON.
 import * as http from 'http';
 import * as path from 'path';

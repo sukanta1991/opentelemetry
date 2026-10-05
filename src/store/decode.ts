@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Decodes OTLP payloads (already parsed from protobuf or JSON into plain JS objects)
 // into the internal model. Handles the union of shapes produced by @grpc/proto-loader,
 // protobufjs toObject, and OTLP/JSON: camelCase fields, 64-bit ints as decimal strings,

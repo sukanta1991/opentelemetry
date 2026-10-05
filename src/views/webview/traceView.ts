@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure view-model for the traces table: query input, wire rows, sorting, cell text and the
 // persisted panel state. Shared by the extension host, the webview bundle and unit tests.
 

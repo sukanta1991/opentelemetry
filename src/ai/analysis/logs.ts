@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_queryLogs: filter held logs across instances, newest first.
 
 import { normalizeSpanId } from '../../store/ids';

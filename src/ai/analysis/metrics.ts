@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_queryMetrics: list metrics, or summarize every series of one metric.
 
 import { TelemetryStore } from '../../store/store';

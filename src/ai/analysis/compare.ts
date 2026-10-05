@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // otel_compareTraces: where a trace spent more time than a baseline (explicit or median of peers).
 
 import { TelemetryStore } from '../../store/store';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure path handling for Navigate To Code. File paths come from untrusted telemetry.
 
 import * as path from 'path';

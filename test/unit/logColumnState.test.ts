@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { ATTR_KEY_LIMIT, attrColumnId } from '../../src/views/webview/logColumns';
 import {

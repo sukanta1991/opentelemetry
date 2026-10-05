@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Time-range picker shared by the logs and traces webviews. Pure: no vscode or DOM imports.
 
 export type TimeRangeKind = '1m' | '2m' | '5m' | '15m' | '30m' | '1h' | '2h' | 'all';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Store builders for AI tests. Not a *.test.ts file, so Mocha doesn't run it directly.
 
 import { LogRecord, Metric, Span } from '../../src/store/model';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { searchTraces, summaryCache } from '../../src/ai/analysis/traces';
 import { createRedactor } from '../../src/ai/redact';

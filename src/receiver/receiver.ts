@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Receiver facade: owns the gRPC + HTTP OTLP servers, binds them, and routes decoded
 // payloads into the telemetry store.
 import * as grpc from '@grpc/grpc-js';

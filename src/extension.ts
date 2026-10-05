@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as vscode from 'vscode';
 import { registerOtelParticipant } from './ai/participant';
 import { registerAiTools } from './ai/tools';

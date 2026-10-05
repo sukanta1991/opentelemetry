@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Size and work caps for AI tool results. No vscode import.
 
 export const DEFAULT_MAX_ITEMS = 25;

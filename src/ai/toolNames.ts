@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Single source of truth for tool names: package.json, registration and tests all check against it.
 
 export const TOOL_NAMES = [

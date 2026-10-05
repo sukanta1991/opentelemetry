@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { DEFAULT_MAX_ITEMS, HARD_MAX_ITEMS } from '../../src/ai/limits';
 import { sanitizeAiSettings } from '../../src/ai/aiSettings';

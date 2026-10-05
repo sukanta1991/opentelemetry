@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { decodeLogs, decodeMetrics, decodeTraces } from '../../src/store/decode';
 import { msToNano } from '../../src/store/encode';

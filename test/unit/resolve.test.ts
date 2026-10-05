@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { allTraceIds, latestTraceId, resolveSpanId, resolveTraceId } from '../../src/ai/resolve';
 import { TelemetryStore } from '../../src/store/store';

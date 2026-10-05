@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { queryMetrics } from '../../src/ai/analysis/metrics';
 import { REDACTED, createRedactor } from '../../src/ai/redact';

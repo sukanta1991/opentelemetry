@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // @otel participant logic without vscode: the tool-calling loop, history trimming and user-facing
 // messages. src/ai/participant.ts adapts it to the VS Code chat and language model APIs.
 

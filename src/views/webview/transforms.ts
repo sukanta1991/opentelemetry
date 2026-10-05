@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Pure numeric transforms for chart kinds derived from a line series.
 // Must not import vscode, uplot, or DOM so they stay node-testable.
 

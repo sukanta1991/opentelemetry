@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Assembles the waterfall message: span rows plus correlated logs grouped by span, with caps
 // so a chatty trace cannot produce an unbounded webview payload.
 

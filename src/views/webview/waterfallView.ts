@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Waterfall + span details for the traces webview. Every value that reaches the DOM goes
 // through esc(); ids posted back to the host are re-validated there.
 
