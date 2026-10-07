@@ -101,6 +101,17 @@ describe('serviceGraph', () => {
     ]);
   });
 
+  it('resolves parents within their own trace when span ids repeat across traces', () => {
+    const T2 = 'dddddddddddddddddddddddddddddddd';
+    const store = new TelemetryStore();
+    addSpans(store, 'web', [span({ traceId: T, spanId: 'f000000000000001', kind: 'SERVER' })]);
+    addSpans(store, 'api', [span({ traceId: T, spanId: 'f000000000000002', parentSpanId: 'f000000000000001' })]);
+    addSpans(store, 'batch', [span({ traceId: T2, spanId: 'f000000000000001' })]);
+    assert.deepStrictEqual(buildGraph(store.getAllTaggedSpans()).edges, [
+      { source: 'svc:web', target: 'svc:api', count: 1, errors: 0 },
+    ]);
+  });
+
   it('returns an empty graph for no spans', () => {
     assert.deepStrictEqual(buildGraph([]), { nodes: [], edges: [] });
   });

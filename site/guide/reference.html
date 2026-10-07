@@ -84,7 +84,7 @@
             <tr><td><code>OpenTelemetry: Save Session…</code></td><td>Save all traces, logs and metrics to one <code>.otel.json</code> file. Each section is an OTLP <code>Export*ServiceRequest</code>.</td></tr>
             <tr><td><code>OpenTelemetry: Load Session…</code></td><td>Load a saved session, an OTLP/JSON request, or Collector file-exporter JSON Lines under <strong>Imported</strong>.</td></tr>
             <tr><td><code>OpenTelemetry: Save Instance…</code></td><td>Save one instance's traces, logs and metrics.</td></tr>
-            <tr><td><code>OpenTelemetry: Open Service Map</code></td><td>Show the service dependency graph.</td></tr>
+            <tr><td><code>OpenTelemetry: Open Service Map</code></td><td>Show the live service dependency map.</td></tr>
             <tr><td><code>OpenTelemetry: Find Trace by ID</code></td><td>Open a trace's waterfall from a trace ID or W3C <code>traceparent</code>.</td></tr>
           </tbody>
         </table>
@@ -108,6 +108,10 @@
             <tr><td><code>otel.retention.maxMetricPointsPerSeries</code></td><td><code>500</code></td><td>Metric points retained per series (controls graph history depth).</td></tr>
             <tr><td><code>otel.import.maxFileSize</code></td><td><code>200</code></td><td>Largest file (MB) accepted by <strong>Import Logs</strong> or <strong>Load Session</strong>. Checked before the file is read.</td></tr>
             <tr><td><code>otel.import.maxRecords</code></td><td><code>50000</code></td><td>Most records (spans, logs and metric points) accepted from one import or session. Imported data bypasses retention, so this bounds its memory use.</td></tr>
+            <tr><td><code>otel.serviceMap.latencyWarnMs</code></td><td><code>300</code></td><td>Service map: p95 latency (ms) at or above which a node or call shows a warning.</td></tr>
+            <tr><td><code>otel.serviceMap.latencyCriticalMs</code></td><td><code>1000</code></td><td>Service map: p95 latency (ms) at or above which a node or call is critical.</td></tr>
+            <tr><td><code>otel.serviceMap.errorRateWarn</code></td><td><code>0.01</code></td><td>Service map: error rate (0–1) at or above which a node or call shows a warning.</td></tr>
+            <tr><td><code>otel.serviceMap.errorRateCritical</code></td><td><code>0.05</code></td><td>Service map: error rate (0–1) at or above which a node or call is critical.</td></tr>
             <tr><td><code>otel.ai.enabled</code></td><td><code>false</code></td><td>Let Copilot and <code>@otel</code> read collected telemetry through the <code>otel_*</code> tools. User setting only.</td></tr>
             <tr><td><code>otel.ai.redactAttributeKeys</code></td><td><code>[]</code></td><td>Extra attribute keys to mask before data is sent to a model (added to the built-in list).</td></tr>
             <tr><td><code>otel.ai.maxResultItems</code></td><td><code>25</code></td><td>Most items one AI tool call may return (1–200).</td></tr>

@@ -139,10 +139,17 @@
       <h2 id="service-map">Service map</h2>
       <figure>
         <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Service Map</span></div>
-          <img class="zoomable" src="../assets/img/screenshots/service-map.png" width="2164" height="1708" loading="lazy" alt="Service map">
+          <img class="zoomable" src="../assets/img/screenshots/service-map.png" width="2800" height="1640" loading="lazy" alt="Live service map with health colours, request rates and the details panel">
         </div>
       </figure>
-      <p>Services, databases, queues and external dependencies inferred from spans. Open it from <strong>OpenTelemetry: Open Service Map</strong>, or on an imported file to see just that file's services.</p>
+      <p>A live map of services, databases, queues and external dependencies inferred from spans. Open it from <strong>OpenTelemetry: Open Service Map</strong>, or on an imported file to see just that file's services.</p>
+      <ul>
+        <li><strong>Layout:</strong> callers above callees; cycles are drawn as curved back-edges and very wide layers wrap. <strong>Fit</strong>, <strong>Re-layout</strong>, mouse-wheel zoom and drag to pan.</li>
+        <li><strong>Time window</strong> (1 min … 2 hours, or all retained data), measured back from the newest span. Edges show <strong>req/min</strong> for a window, or the call count for <em>All</em>. A <strong>partial window</strong> badge means less data is retained or received than the window asks for; rates use the shorter span.</li>
+        <li><strong>Health:</strong> every service, dependency and call is <strong>Healthy ●</strong>, <strong>Warning ▲</strong>, <strong>Critical ✖</strong> or <strong>Idle ○</strong>, from the worse of its error rate and p95 latency against the <code>otel.serviceMap.*</code> thresholds. Fewer than 5 calls show at most a warning.</li>
+        <li><strong>Details:</strong> click a node or edge (or Tab to it and press Enter) for its stats, callers and callees, top operations, recent errors, slowest traces and source files. Services get <strong>Traces / Logs / Metrics</strong> buttons. Esc closes the panel.</li>
+        <li>Numbers come from the spans still in memory, so they are bounded by <code>otel.retention.maxTracesPerInstance</code>. Maps with more than 250 nodes hide the least-called dependencies.</li>
+      </ul>
 
       <h2 id="sessions">Sessions, import &amp; export</h2>
       <ul>

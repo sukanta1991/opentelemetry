@@ -1,14 +1,43 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { readServiceMapThresholds } from '../settings';
 import { LIVE_REALM } from '../store/store';
-import { buildGraph } from './serviceGraph';
-import { getNonce, htmlShell } from './webviewUtil';
+import { openCodeLocation } from './codeNav';
+import { LogsPanel } from './logsPanel';
+import { MetricsPanel } from './metricsPanel';
+import { revealTrace } from './navigation';
+import { MapSelection, NodeDetails, ServiceMapModel, buildNodeDetails, buildServiceMap } from './serviceMapModel';
+import { TracesPanel } from './tracesPanel';
+import { HostMessage, OpenTarget, ViewMessage, parseMapMessage } from './webview/serviceMapView';
+import { DEFAULT_TIME_RANGE, TimeRangeKind } from './webview/timeRange';
+import {
+  RANGE_ICON_SVG,
+  RANGE_PICKER_CSS,
+  getNonce,
+  getUri,
+  htmlShell,
+  timeZoneAttr,
+  watchTimeZone,
+} from './webviewUtil';
+
+const REFRESH_THROTTLE_MS = 500;
 
 // One panel per realm: live data, or one loaded session file.
 export class ServiceMapPanel {
   private static panels = new Map<string, ServiceMapPanel>();
   private disposables: vscode.Disposable[] = [];
+  private ready = false;
+  private range: TimeRangeKind = DEFAULT_TIME_RANGE;
+  private selection: MapSelection | null = null;
+  // Last posted state; webview actions are validated against it.
+  private seq = 0;
+  private model: ServiceMapModel | null = null;
+  private details: NodeDetails | null = null;
+  private lastSig = '';
+  private lastPost = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private dirty = false;
 
   static show(controller: OtelController, realm = LIVE_REALM): void {
     const existing = ServiceMapPanel.panels.get(realm);
@@ -21,7 +50,11 @@ export class ServiceMapPanel {
       'otel.serviceMap',
       source ? `Service Map: ${source}` : 'OpenTelemetry Service Map',
       vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
+      }
     );
     ServiceMapPanel.panels.set(realm, new ServiceMapPanel(panel, controller, realm));
   }
@@ -31,99 +64,268 @@ export class ServiceMapPanel {
     private readonly controller: OtelController,
     private readonly realm: string
   ) {
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, SCRIPT, STYLE);
+    const scriptUri = getUri(panel.webview, controller.extensionUri, 'dist', 'webview', 'serviceMap.js');
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneAttr());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-    this.panel.webview.onDidReceiveMessage((m) => {
-      if (m?.type === 'ready') this.postGraph();
-    }, null, this.disposables);
-    this.disposables.push(this.controller.store.onDidChange(() => this.postGraph()));
-    this.postGraph();
+    this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.panel.visible && this.dirty) this.schedule();
+      },
+      null,
+      this.disposables
+    );
+    this.disposables.push(
+      watchTimeZone(this.panel.webview),
+      this.controller.store.onDidChange(() => this.schedule()),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('otel.serviceMap')) this.schedule(true);
+      })
+    );
   }
 
-  private postGraph(): void {
-    const { nodes, edges } = buildGraph(this.controller.store.getAllTaggedSpans(this.realm));
-    this.panel.webview.postMessage({ type: 'graph', nodes, edges });
+  private onMessage(m: unknown): void {
+    const msg = parseMapMessage(m, {
+      seq: this.seq,
+      model: this.model,
+      details: this.details,
+      selection: this.selection,
+    });
+    if (!msg) return;
+    switch (msg.type) {
+      case 'ready':
+        this.ready = true;
+        this.range = msg.range;
+        this.selection = msg.selection;
+        // A reloaded webview has no state; force the next update through.
+        this.lastSig = '';
+        return this.schedule(true);
+      case 'setRange':
+        this.range = msg.range;
+        return this.schedule(true);
+      case 'select':
+        this.selection = msg.selection;
+        return this.schedule(true);
+      default:
+        this.runAction(msg).catch((err) =>
+          vscode.window.showErrorMessage(`Service map: ${err instanceof Error ? err.message : String(err)}`)
+        );
+    }
+  }
+
+  private async runAction(msg: ViewMessage): Promise<void> {
+    const details = this.details;
+    if (msg.type === 'open') {
+      const sel = this.selection;
+      const node = sel?.kind === 'node' ? this.model?.nodes.find((n) => n.id === sel.id) : undefined;
+      if (node) await this.openForService(node.label, msg.target);
+    } else if (msg.type === 'revealTrace' && details) {
+      const ref = (msg.list === 'error' ? details.errorTraces : details.slowTraces)[msg.index];
+      revealTrace(this.controller, { traceId: ref.traceId, spanId: ref.spanId, preferInstanceId: ref.instanceId });
+    } else if (msg.type === 'openSource' && details) {
+      await openCodeLocation(details.sources[msg.index].location);
+    }
+  }
+
+  private async openForService(service: string, target: OpenTarget): Promise<void> {
+    const instances = this.controller.store
+      .getAllInstances()
+      .filter((i) => i.realm === this.realm && i.serviceName === service)
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+    if (!instances.length) {
+      vscode.window.showInformationMessage(`No instances of ${service} are in the collected data.`);
+      return;
+    }
+    let id = instances[0].id;
+    if (instances.length > 1) {
+      const pick = await vscode.window.showQuickPick(
+        instances.map((i) => ({
+          label: i.serviceInstanceId ?? i.id,
+          description: i.source,
+          detail: `Last seen ${new Date(i.lastSeen).toLocaleTimeString()} · ${i.spanCount} spans · ${i.logCount} logs`,
+          id: i.id,
+        })),
+        { title: `Open ${target} for ${service}`, placeHolder: 'Select an instance' }
+      );
+      if (!pick) return;
+      id = pick.id;
+    }
+    if (target === 'traces') TracesPanel.show(this.controller, id);
+    else if (target === 'logs') LogsPanel.show(this.controller, id);
+    else MetricsPanel.show(this.controller, id);
+  }
+
+  // Hidden panels only mark themselves dirty; visible ones refresh at most every 500 ms.
+  // User actions (immediate) skip the throttle so selection and range changes feel instant.
+  private schedule(immediate = false): void {
+    if (!this.ready) return;
+    if (!this.panel.visible) {
+      this.dirty = true;
+      return;
+    }
+    if (immediate) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+      this.refresh();
+      return;
+    }
+    if (this.timer) return;
+    const wait = Math.max(0, this.lastPost + REFRESH_THROTTLE_MS - Date.now());
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.refresh();
+    }, wait);
+  }
+
+  private refresh(): void {
+    this.dirty = false;
+    this.lastPost = Date.now();
+    let msg: HostMessage;
+    let sig: string;
+    if (this.realm !== LIVE_REALM && !this.controller.store.getSession(this.realm)) {
+      this.model = null;
+      this.details = null;
+      this.selection = null;
+      msg = { type: 'gone' };
+      sig = 'gone';
+    } else {
+      try {
+        const tagged = this.controller.store.getAllTaggedSpans(this.realm);
+        const model = buildServiceMap(tagged, { range: this.range, thresholds: readServiceMapThresholds() });
+        const details = (this.selection && buildNodeDetails(tagged, model, this.selection)) || null;
+        if (!details) this.selection = null;
+        sig = JSON.stringify([model, details]);
+        this.model = model;
+        this.details = details;
+        msg = { type: 'update', seq: this.seq + 1, model, details };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        msg = { type: 'error', message };
+        sig = `error:${message}`;
+      }
+    }
+    if (sig === this.lastSig) return;
+    this.lastSig = sig;
+    if (msg.type === 'update') this.seq = msg.seq;
+    void this.panel.webview.postMessage(msg);
   }
 
   private dispose(): void {
     ServiceMapPanel.panels.delete(this.realm);
+    clearTimeout(this.timer);
+    this.timer = undefined;
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }
 
-const STYLE = `
-  #wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  svg { width:100%; height:100%; display:block; }
-  .node rect, .node ellipse { stroke: var(--vscode-panel-border); stroke-width:1.5; }
-  .node.service rect { fill: var(--vscode-button-background); }
-  .node.database ellipse { fill: var(--vscode-charts-purple, #b180d7); }
-  .node.queue rect { fill: var(--vscode-charts-orange, #d18616); }
-  .node.external rect { fill: var(--vscode-charts-green, #89d185); }
-  .node text { fill: var(--vscode-button-foreground); font-size: 12px; pointer-events:none; }
-  .node.database text, .node.queue text, .node.external text { fill: #1e1e1e; }
-  .edge { stroke: var(--vscode-descriptionForeground); fill:none; marker-end:url(#arrow); }
-  .edge.error { stroke: var(--vscode-errorForeground); }
-  .edge-label { fill: var(--vscode-descriptionForeground); font-size: 10px; }
+const STYLE = `${RANGE_PICKER_CSS}
+  #main { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+  #wrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  #svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none; }
+  #svg.panning { cursor: grabbing; }
+  .badge {
+    padding: 1px 6px; border-radius: 8px; font-size: 0.85em;
+    background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+  }
+  .legend { display: inline-flex; gap: 8px; margin-left: auto; font-size: 0.9em; }
+  .health-ok { --h: var(--vscode-testing-iconPassed, #73c991); }
+  .health-warn { --h: var(--vscode-editorWarning-foreground, #cca700); }
+  .health-critical { --h: var(--vscode-errorForeground, #f14c4c); }
+  .health-idle { --h: var(--vscode-disabledForeground, #8b8b8b); }
+  .glyph { color: var(--h); fill: var(--h); }
+
+  .node { cursor: pointer; outline: none; }
+  .node .shape { --t: var(--vscode-editor-background); fill: var(--t); stroke: var(--h); stroke-width: 2; }
+  .node.service .shape { --t: var(--vscode-editorWidget-background, var(--vscode-editor-background)); }
+  .node.database .shape { --t: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 16%, var(--vscode-editor-background)); }
+  .node.queue .shape { --t: color-mix(in srgb, var(--vscode-charts-orange, #d18616) 16%, var(--vscode-editor-background)); }
+  .node.external .shape { --t: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 16%, var(--vscode-editor-background)); }
+  .node.health-idle .shape { stroke-dasharray: 4 3; }
+  .node text { fill: var(--vscode-foreground); font-size: 12px; pointer-events: none; }
+  .node .label { font-weight: 600; }
+  .node .glyph { fill: var(--h); }
+  .node .sub { fill: var(--vscode-descriptionForeground); font-size: 11px; }
+  .node .spark { fill: none; stroke: var(--h); stroke-width: 1.2; opacity: 0.8; }
+  .node.selected .shape { stroke-width: 3.5; }
+  .node:focus-visible .shape { stroke: var(--vscode-focusBorder); stroke-width: 3; }
+  .edge-group { cursor: pointer; outline: none; }
+  .edge { fill: none; stroke: var(--h); opacity: 0.85; }
+  .edge-group.health-ok .edge, .edge-group.health-idle .edge { stroke: var(--vscode-descriptionForeground); }
+  .edge-group.selected .edge { opacity: 1; stroke-dasharray: 6 3; }
+  .edge-group:focus-visible .edge { stroke: var(--vscode-focusBorder); }
+  .edge-hit { fill: none; stroke: transparent; stroke-width: 12; }
+  .edge-label {
+    fill: var(--vscode-descriptionForeground); font-size: 10px; pointer-events: none;
+    paint-order: stroke; stroke: var(--vscode-editor-background); stroke-width: 3px;
+  }
+  #svg.zoomed-out .edge-label, #svg.zoomed-out .node .sub { display: none; }
+  .arrow { fill: var(--h); }
+  .arrow.health-ok, .arrow.health-idle { fill: var(--vscode-descriptionForeground); }
+
+  #note {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%); max-width: 90%;
+    padding: 4px 10px; border-radius: 3px; font-size: 0.9em;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-panel-border);
+  }
+  #note.error, #empty.error { color: var(--vscode-errorForeground); }
+  #empty { position: absolute; inset: 0; }
+
+  #details {
+    flex: 0 0 340px; overflow: auto; padding: 8px 12px;
+    border-left: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  }
+  #details header { display: flex; align-items: center; gap: 6px; }
+  #details h2 { flex: 1 1 auto; margin: 0; font-size: 1.1em; overflow-wrap: anywhere; }
+  #details h3 {
+    margin: 14px 0 4px; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--vscode-descriptionForeground);
+  }
+  #details .stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0; }
+  #details dt { color: var(--vscode-descriptionForeground); }
+  #details dd { margin: 0; font-variant-numeric: tabular-nums; }
+  #details .actions { display: flex; gap: 6px; margin: 8px 0; }
+  #details .list { list-style: none; margin: 0; padding: 0; }
+  #details .list li { padding: 2px 0; overflow-wrap: anywhere; }
+  #details .list .glyph { margin-right: 4px; }
+  #details td.op { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #details td.num { text-align: right; }
+  button.link {
+    background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+    color: var(--vscode-textLink-foreground);
+  }
+  button.link:hover { background: none; text-decoration: underline; }
+  button.close { background: none; color: var(--vscode-foreground); font-size: 1.2em; padding: 0 4px; }
+  button.close:hover { background: var(--vscode-toolbar-hoverBackground); }
+  button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 `;
 
 const BODY = `
 <div class="toolbar">
   <strong>Service Map</strong>
-  <span class="muted">services · databases · queues · external</span>
-  <button id="relayout" class="secondary" style="margin-left:auto">Re-layout</button>
+  <span class="range-picker" title="Time window, measured back from the newest span received">
+    ${RANGE_ICON_SVG}<select id="range" aria-label="Time window"></select>
+  </span>
+  <button id="fit" class="secondary" title="Fit the whole map in view">Fit</button>
+  <button id="relayout" class="secondary" title="Recompute the layout">Re-layout</button>
+  <span id="asOf" class="muted"></span>
+  <span id="partial" class="badge" hidden>partial window</span>
+  <span id="hiddenNodes" class="badge" hidden></span>
+  <span class="legend" aria-label="Legend">
+    <span class="health-ok"><span class="glyph">●</span> Healthy</span>
+    <span class="health-warn"><span class="glyph">▲</span> Warning</span>
+    <span class="health-critical"><span class="glyph">✖</span> Critical</span>
+    <span class="health-idle"><span class="glyph">○</span> Idle</span>
+  </span>
 </div>
-<div id="wrap"><svg id="svg"></svg></div>
-<div id="empty" class="empty">No traces yet. Generate distributed traces (e.g. HTTP calls) to populate the map.</div>
-`;
-
-const SCRIPT = `
-const vscode = acquireVsCodeApi();
-let nodes=[], edges=[];
-const svg=document.getElementById('svg');
-const empty=document.getElementById('empty');
-function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-function layout(){
-  const W=svg.clientWidth||800, H=svg.clientHeight||600;
-  const cx=W/2, cy=H/2;
-  const services=nodes.filter(n=>n.type==='service');
-  const others=nodes.filter(n=>n.type!=='service');
-  const pos={};
-  const rS=Math.min(W,H)/3;
-  services.forEach((n,i)=>{ const a=(i/Math.max(1,services.length))*Math.PI*2 - Math.PI/2; pos[n.id]={x:cx+rS*Math.cos(a), y:cy+rS*Math.sin(a)}; });
-  const rO=Math.min(W,H)/2.1;
-  others.forEach((n,i)=>{ const a=(i/Math.max(1,others.length))*Math.PI*2; pos[n.id]={x:cx+rO*Math.cos(a), y:cy+rO*Math.sin(a)}; });
-  return pos;
-}
-
-function render(){
-  empty.style.display = nodes.length? 'none':'block';
-  const pos=layout();
-  const maxCount=Math.max(1,...edges.map(e=>e.count));
-  let s='<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="var(--vscode-descriptionForeground)"/></marker></defs>';
-  for(const e of edges){
-    const a=pos[e.source], b=pos[e.target]; if(!a||!b) continue;
-    const w=1+3*(e.count/maxCount);
-    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-    s+='<path class="edge'+(e.errors?' error':'')+'" style="stroke-width:'+w+'" d="M'+a.x+','+a.y+' L'+b.x+','+b.y+'"/>';
-    s+='<text class="edge-label" x="'+mx+'" y="'+my+'">'+e.count+(e.errors?(' ⚠'+e.errors):'')+'</text>';
-  }
-  for(const n of nodes){
-    const p=pos[n.id]; if(!p) continue;
-    const label=esc(n.label);
-    const wLbl=Math.max(60, label.length*7+16);
-    if(n.type==='database'){
-      s+='<g class="node database" transform="translate('+p.x+','+p.y+')"><ellipse rx="'+(wLbl/2)+'" ry="20"/><text text-anchor="middle" dy="4">'+label+'</text></g>';
-    } else {
-      s+='<g class="node '+n.type+'" transform="translate('+p.x+','+p.y+')"><rect x="'+(-wLbl/2)+'" y="-16" width="'+wLbl+'" height="32" rx="4"/><text text-anchor="middle" dy="4">'+label+'</text></g>';
-    }
-  }
-  svg.innerHTML=s;
-}
-
-document.getElementById('relayout').addEventListener('click', render);
-window.addEventListener('resize', render);
-window.addEventListener('message', e=>{ const m=e.data; if(m.type==='graph'){ nodes=m.nodes; edges=m.edges; render(); }});
-vscode.postMessage({type:'ready'});
+<div id="main">
+  <div id="wrap">
+    <svg id="svg" role="group" aria-label="Service dependency map. Tab to a service or call, Enter to show details, Escape to close."><g id="viewport"></g></svg>
+    <div id="note" hidden></div>
+    <div id="empty" class="empty" hidden></div>
+  </div>
+  <aside id="details" hidden aria-label="Selection details"></aside>
+</div>
 `;
