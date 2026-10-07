@@ -11,9 +11,12 @@ const SERVICES = 10;
 const TRACES = 2000;
 const SPANS_PER_SERVICE = 10;
 const RUNS = 10;
-const MAP_BUDGET_MS = 250;
-const DETAILS_BUDGET_MS = 150;
-const LAYOUT_BUDGET_MS = 20;
+const WARMUP_RUNS = 2;
+// Budgets are dev-machine targets; shared CI runners (notably 3-vCPU macOS) are several times slower.
+const CI_FACTOR = process.env.CI ? 2 : 1;
+const MAP_BUDGET_MS = 250 * CI_FACTOR;
+const DETAILS_BUDGET_MS = 150 * CI_FACTOR;
+const LAYOUT_BUDGET_MS = 20 * CI_FACTOR;
 
 // Every trace crosses all services (svc0 -> svc1 -> ...), so retention holds 10 x 2000 x 10 = 200k spans.
 function fill(): TelemetryStore {
@@ -51,14 +54,22 @@ function fill(): TelemetryStore {
   return store;
 }
 
-function p95(fn: () => unknown): number {
+// Untimed warm-up runs absorb JIT compilation. The median gates, since with 10 samples p95 is effectively
+// the single slowest run and one GC pause would decide the result; p95 is still reported.
+function timeIt(fn: () => unknown): { median: number; p95: number } {
+  for (let i = 0; i < WARMUP_RUNS; i++) fn();
   const times: number[] = [];
   for (let i = 0; i < RUNS; i++) {
     const t = process.hrtime.bigint();
     fn();
     times.push(Number(process.hrtime.bigint() - t) / 1e6);
   }
-  return quantile(times, 0.95)!;
+  return { median: quantile(times, 0.5)!, p95: quantile(times, 0.95)! };
+}
+
+function assertBudget(fn: () => unknown, budgetMs: number): void {
+  const { median, p95 } = timeIt(fn);
+  assert.ok(median < budgetMs, `median ${median.toFixed(1)} ms, p95 ${p95.toFixed(1)} ms, budget ${budgetMs} ms`);
 }
 
 describe('service map performance (full buffers)', function () {
@@ -77,19 +88,17 @@ describe('service map performance (full buffers)', function () {
   });
 
   for (const range of ['5m', 'all'] as const) {
-    it(`buildServiceMap (${range}): p95 under ${MAP_BUDGET_MS} ms`, () => {
-      const ms = p95(() => buildServiceMap(tagged, { range }));
-      assert.ok(ms < MAP_BUDGET_MS, `p95 ${ms.toFixed(1)} ms`);
+    it(`buildServiceMap (${range}): median under ${MAP_BUDGET_MS} ms`, () => {
+      assertBudget(() => buildServiceMap(tagged, { range }), MAP_BUDGET_MS);
     });
   }
 
-  it(`buildNodeDetails: p95 under ${DETAILS_BUDGET_MS} ms`, () => {
+  it(`buildNodeDetails: median under ${DETAILS_BUDGET_MS} ms`, () => {
     const m = buildServiceMap(tagged, { range: 'all' });
-    const ms = p95(() => buildNodeDetails(tagged, m, { kind: 'node', id: 'svc:svc5' }));
-    assert.ok(ms < DETAILS_BUDGET_MS, `p95 ${ms.toFixed(1)} ms`);
+    assertBudget(() => buildNodeDetails(tagged, m, { kind: 'node', id: 'svc:svc5' }), DETAILS_BUDGET_MS);
   });
 
-  it(`layoutGraph (250 nodes, 1000 edges with cycles): p95 under ${LAYOUT_BUDGET_MS} ms`, () => {
+  it(`layoutGraph (250 nodes, 1000 edges with cycles): median under ${LAYOUT_BUDGET_MS} ms`, () => {
     const nodes: LayoutNode[] = Array.from({ length: 250 }, (_, i) =>
       i < 100 ? { id: `svc:s${i}`, label: `service-${i}`, type: 'service' } : { id: `db:d${i}`, label: `db-${i}`, type: 'database' }
     );
@@ -107,7 +116,6 @@ describe('service map performance (full buffers)', function () {
     const layout = layoutGraph(nodes, edges);
     assert.strictEqual(layout.boxes.size, 250);
     assert.ok(layout.backEdges.size > 0);
-    const ms = p95(() => layoutGraph(nodes, edges));
-    assert.ok(ms < LAYOUT_BUDGET_MS, `p95 ${ms.toFixed(1)} ms`);
+    assertBudget(() => layoutGraph(nodes, edges), LAYOUT_BUDGET_MS);
   });
 });
