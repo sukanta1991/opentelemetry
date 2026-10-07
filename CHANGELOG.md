@@ -5,7 +5,7 @@ All notable changes to the **OpenTelemetry for VS Code** extension are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-07
 
 ### Added
 
@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The service map and the `otel_getServiceMap` tool could draw a wrong cross-service edge when two traces reused the same span ID. Parent spans are now looked up within their own trace.
+
+## [Unreleased]
 
 ## [1.0.0] - 2026-10-05
 

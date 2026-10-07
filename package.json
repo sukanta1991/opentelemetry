@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "Apache-2.0",
