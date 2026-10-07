@@ -22,16 +22,43 @@ function str(v: any): string | undefined {
   return typeof v === 'string' && v ? v : undefined;
 }
 
+export function svcId(serviceName: string): string {
+  return `svc:${serviceName}`;
+}
+
+// The database, queue or external node a span calls, if any. Peers that are known services are not external.
+export function classifySpanTarget(span: Span, serviceNames: ReadonlySet<string>): MapNode | undefined {
+  const a = span.attrs;
+  const db = str(a['db.system']);
+  if (db) {
+    const name = str(a['db.namespace']) ?? str(a['db.name']) ?? db;
+    return { id: `db:${db}:${name}`, label: `${db}: ${name}`, type: 'database' };
+  }
+  const msg = str(a['messaging.system']);
+  if (msg) {
+    const dest = str(a['messaging.destination.name']) ?? str(a['messaging.destination']) ?? msg;
+    return { id: `queue:${msg}:${dest}`, label: `${msg}: ${dest}`, type: 'queue' };
+  }
+  if (span.kind === 'CLIENT') {
+    const peer =
+      str(a['peer.service']) ?? str(a['server.address']) ?? str(a['net.peer.name']) ?? str(a['rpc.service']);
+    if (peer && !serviceNames.has(peer)) return { id: `ext:${peer}`, label: peer, type: 'external' };
+  }
+  return undefined;
+}
+
 export function buildGraph(tagged: { span: Span; serviceName: string }[]): {
   nodes: MapNode[];
   edges: MapEdge[];
 } {
   const nodes = new Map<string, MapNode>();
   const edges = new Map<string, MapEdge>();
-  const serviceBySpan = new Map<string, string>();
+  // traceId -> spanId -> service; span ids are only unique within a trace.
+  const serviceBySpan = new Map<string, Map<string, string>>();
+  const serviceNames = new Set<string>();
 
-  const addNode = (id: string, label: string, type: NodeType) => {
-    if (!nodes.has(id)) nodes.set(id, { id, label, type });
+  const addNode = (node: MapNode) => {
+    if (!nodes.has(node.id)) nodes.set(node.id, node);
   };
   const addEdge = (source: string, target: string, isError: boolean) => {
     if (source === target) return;
@@ -43,51 +70,30 @@ export function buildGraph(tagged: { span: Span; serviceName: string }[]): {
   };
 
   for (const { span, serviceName } of tagged) {
-    addNode(`svc:${serviceName}`, serviceName, 'service');
-    serviceBySpan.set(span.spanId, serviceName);
+    if (!serviceNames.has(serviceName)) {
+      serviceNames.add(serviceName);
+      addNode({ id: svcId(serviceName), label: serviceName, type: 'service' });
+    }
+    let byId = serviceBySpan.get(span.traceId);
+    if (!byId) serviceBySpan.set(span.traceId, (byId = new Map()));
+    byId.set(span.spanId, serviceName);
   }
 
   for (const { span, serviceName } of tagged) {
-    const a = span.attrs;
-    const isError = span.statusCode === 'ERROR';
-    const db = str(a['db.system']);
-    const msg = str(a['messaging.system']);
-    if (db) {
-      const name = str(a['db.namespace']) ?? str(a['db.name']) ?? db;
-      const id = `db:${db}:${name}`;
-      addNode(id, `${db}: ${name}`, 'database');
-      addEdge(`svc:${serviceName}`, id, isError);
-    } else if (msg) {
-      const dest = str(a['messaging.destination.name']) ?? str(a['messaging.destination']) ?? msg;
-      const id = `queue:${msg}:${dest}`;
-      addNode(id, `${msg}: ${dest}`, 'queue');
-      addEdge(`svc:${serviceName}`, id, isError);
-    } else if (span.kind === 'CLIENT') {
-      const peer =
-        str(a['peer.service']) ??
-        str(a['server.address']) ??
-        str(a['net.peer.name']) ??
-        str(a['rpc.service']);
-      if (peer && !serviceExists(nodes, peer)) {
-        const id = `ext:${peer}`;
-        addNode(id, peer, 'external');
-        addEdge(`svc:${serviceName}`, id, isError);
-      }
-    }
+    const target = classifySpanTarget(span, serviceNames);
+    if (!target) continue;
+    addNode(target);
+    addEdge(svcId(serviceName), target.id, span.statusCode === 'ERROR');
   }
 
   // Cross-service edges via parent/child across services.
   for (const { span, serviceName } of tagged) {
     if (!span.parentSpanId) continue;
-    const parentService = serviceBySpan.get(span.parentSpanId);
+    const parentService = serviceBySpan.get(span.traceId)?.get(span.parentSpanId);
     if (parentService && parentService !== serviceName) {
-      addEdge(`svc:${parentService}`, `svc:${serviceName}`, span.statusCode === 'ERROR');
+      addEdge(svcId(parentService), svcId(serviceName), span.statusCode === 'ERROR');
     }
   }
 
   return { nodes: [...nodes.values()], edges: [...edges.values()] };
-}
-
-function serviceExists(nodes: Map<string, MapNode>, name: string): boolean {
-  return nodes.has(`svc:${name}`);
 }

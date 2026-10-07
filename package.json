@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "Apache-2.0",
@@ -484,6 +484,36 @@
           "default": 50000,
           "minimum": 1,
           "description": "Maximum number of records accepted from a single import or loaded session (spans, logs and metric points combined). Imported data is exempt from retention limits, so this bounds how much memory one file can consume."
+        },
+        "otel.serviceMap.latencyWarnMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "scope": "resource",
+          "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.latencyCriticalMs#` are lowered to it."
+        },
+        "otel.serviceMap.latencyCriticalMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "scope": "resource",
+          "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
+        },
+        "otel.serviceMap.errorRateWarn": {
+          "type": "number",
+          "default": 0.01,
+          "minimum": 0,
+          "maximum": 1,
+          "scope": "resource",
+          "markdownDescription": "Service map: error rate (0–1, e.g. `0.01` = 1%) at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.errorRateCritical#` are lowered to it."
+        },
+        "otel.serviceMap.errorRateCritical": {
+          "type": "number",
+          "default": 0.05,
+          "minimum": 0,
+          "maximum": 1,
+          "scope": "resource",
+          "markdownDescription": "Service map: error rate (0–1, e.g. `0.05` = 5%) at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
         },
         "otel.ai.enabled": {
           "type": "boolean",

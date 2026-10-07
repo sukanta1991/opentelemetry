@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AiSettings, sanitizeAiSettings } from './ai/aiSettings';
 import { DEFAULT_MAX_ITEMS } from './ai/limits';
 import { ReceiverConfig } from './receiver/receiver';
+import { ServiceMapThresholds, sanitizeThresholds } from './views/serviceMapModel';
 
 export interface OtelSettings extends ReceiverConfig {
   launchOnStartup: boolean;
@@ -34,6 +35,16 @@ export function readSettings(): OtelSettings {
 
 export function useLocalTime(): boolean {
   return vscode.workspace.getConfiguration('otel').get<boolean>('useLocalTime', true);
+}
+
+export function readServiceMapThresholds(): ServiceMapThresholds {
+  const c = vscode.workspace.getConfiguration('otel.serviceMap');
+  return sanitizeThresholds({
+    latencyWarnMs: c.get<unknown>('latencyWarnMs'),
+    latencyCriticalMs: c.get<unknown>('latencyCriticalMs'),
+    errorRateWarn: c.get<unknown>('errorRateWarn'),
+    errorRateCritical: c.get<unknown>('errorRateCritical'),
+  });
 }
 
 export function readAiSettings(): AiSettings {

@@ -74,6 +74,7 @@ async function main() {
       'src/views/webview/metricsChart.ts',
       'src/views/webview/logsTable.ts',
       'src/views/webview/tracesTable.ts',
+      'src/views/webview/serviceMap.ts',
     ],
     bundle: true,
     format: 'iife',

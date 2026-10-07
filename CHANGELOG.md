@@ -5,6 +5,22 @@ All notable changes to the **OpenTelemetry for VS Code** extension are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-07
+
+### Added
+
+- **Live service dependency map.** The Service Map now lays out services top-down from callers to callees and shows, for every service, dependency and call:
+  - p50/p95 latency, error rate, call count and **req/min**, plus a sparkline of recent traffic.
+  - A health colour and icon (**Healthy ●**, **Warning ▲**, **Critical ✖**, **Idle ○**) from the worse of error rate and p95 latency.
+  - A **time window** picker (1 min … 2 hours, or all retained data), measured back from the newest span like the Traces and Logs panels, with a **partial window** badge when less data is available.
+  - A **details panel**: callers and callees, top operations, recent errors, slowest traces and source files, with buttons to open the service's **Traces**, **Logs** and **Metrics** (a picker appears for multi-instance services).
+  - Zoom, pan, **Fit** and **Re-layout**; keyboard navigation (Tab, Enter, Esc). The map updates live, at most twice a second, and does no work while hidden.
+- Settings `otel.serviceMap.latencyWarnMs` (300), `otel.serviceMap.latencyCriticalMs` (1000), `otel.serviceMap.errorRateWarn` (0.01) and `otel.serviceMap.errorRateCritical` (0.05). They can be set per workspace.
+
+### Fixed
+
+- The service map and the `otel_getServiceMap` tool could draw a wrong cross-service edge when two traces reused the same span ID. Parent spans are now looked up within their own trace.
+
 ## [Unreleased]
 
 ## [1.0.0] - 2026-10-05

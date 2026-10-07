@@ -4,7 +4,7 @@
 
 Capture OTLP logs, traces, and metrics with a receiver built into the editor. There is no Jaeger, Zipkin, or OpenTelemetry Collector to run. Inspect requests next to your code, jump from a span or log to its source line, see how your services connect and, if you turn it on, ask Copilot to investigate. It works whether your app is launched from VS Code or runs elsewhere, and the data stays in memory on your machine.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v1.0.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v1.1.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 
@@ -66,7 +66,9 @@ observability backend. You can also send data to both at once (see [Apps running
 
 ### Service map
 
-- Services, databases, queues, and external dependencies inferred from spans.
+- Services, databases, queues, and external dependencies inferred from spans, laid out top-down from callers to callees.
+- Live health per service and call: p95 latency, error rate, req/min, and a sparkline, coloured by configurable thresholds.
+- Click a service to open its traces, logs, metrics, slowest and failing traces, and source files.
 
 ### OTLP receiver
 
@@ -94,9 +96,9 @@ See [Features in depth](#features-in-depth) for the full list.
 
 ![Logs panel with the column picker](images/screenshots/logs-columns.png)
 
-**Service map:** services, databases, queues, and external dependencies inferred from spans:
+**Service map:** a live dependency map with p95 latency, error rate, and req/min per service and call. Click a node for its traces, logs, metrics, and source files:
 
-![Service map](images/screenshots/service-map.png)
+![Service map with health colours, request rates, and the details panel](images/screenshots/service-map.png)
 
 **Metrics:** the **Graph** view renders each metric as a chart, with per-graph dropdowns for the chart type, the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
 
@@ -310,7 +312,12 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
   - A **time-range picker** in the toolbar (1 min … 2 hour) applies to every graph at once and pins the x-axis to the selected window, alongside a **Step** control for the aggregation bucket width. **Auto** follows the range; pick a coarser step to gather several samples per bucket. The width actually used is shown beside the Over time dropdown. A hint appears when the retained history is shorter than the chosen range.
   - ⚠️ The aggregation, time-range and step controls are **experimental** while we gather feedback — their defaults and behaviour may change. Please report anything surprising at [github.com/sukanta1991/opentelemetry/issues](https://github.com/sukanta1991/opentelemetry/issues).
   - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and truncate long series labels with a full-text tooltip on hover. History depth is bounded by `otel.retention.maxMetricPointsPerSeries`.
-- **Service map** — services, databases, queues, and external dependencies inferred from spans.
+- **Service map** — a live dependency map of services, databases, queues, and external dependencies inferred from spans:
+  - **Layout:** callers above callees; cycles are drawn as curved back-edges and very wide layers wrap. **Fit**, **Re-layout**, mouse-wheel zoom, and drag to pan.
+  - **Time window** (1 min … 2 hours, or all retained data), measured back from the newest span like the Traces and Logs panels. Edges show **req/min** for a window or the call count for *All*. A **partial window** badge appears when less data is retained or received than the window asks for; rates use the shorter span.
+  - **Health:** each service, dependency, and call is **Healthy ●**, **Warning ▲**, **Critical ✖**, or **Idle ○** (no calls in the window), from the worse of its error rate and p95 latency against the `otel.serviceMap.*` thresholds. Fewer than 5 calls show at most a warning. Service latency is measured on the spans that enter the service; call latency is what the caller saw.
+  - **Details:** click (or Tab + Enter) a node or edge for its stats, callers and callees, top operations, recent errors, slowest traces, and source files (`code.*` attributes). Services also get **Traces / Logs / Metrics** buttons (a picker appears when there are several instances). Esc closes the panel.
+  - Rates and latencies come from the spans still in memory, so they are bounded by `otel.retention.maxTracesPerInstance`. Maps with more than 250 nodes hide the least-called dependencies.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
 - **Ask Copilot** (opt-in) — the `@otel` chat participant and nine `otel_*` tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
 
@@ -351,7 +358,7 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | `OpenTelemetry: Save Session…` | Save all traces, logs and metrics to one `.otel.json` file. Each section is an OTLP `Export*ServiceRequest`. |
 | `OpenTelemetry: Load Session…` | Load a saved session, an OTLP/JSON request, or Collector file-exporter JSON Lines under **Imported**. |
 | `OpenTelemetry: Save Instance…` | Save one instance's traces, logs and metrics. |
-| `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
+| `OpenTelemetry: Open Service Map` | Show the live service dependency map. |
 | `OpenTelemetry: Find Trace by ID` | Open a trace's waterfall from a trace ID or W3C `traceparent`. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action. Right-click a trace in the Traces panel for **Export Trace…**.
@@ -372,6 +379,10 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
 | `otel.import.maxFileSize` | `200` | Largest file (MB) accepted by **Import Logs** or **Load Session**. Checked before the file is read. |
 | `otel.import.maxRecords` | `50000` | Most records (spans, logs and metric points) accepted from one import or session. Imported data bypasses retention, so this bounds its memory use. |
+| `otel.serviceMap.latencyWarnMs` | `300` | Service map: p95 latency (ms) at or above which a node or call shows a warning. |
+| `otel.serviceMap.latencyCriticalMs` | `1000` | Service map: p95 latency (ms) at or above which a node or call is critical. |
+| `otel.serviceMap.errorRateWarn` | `0.01` | Service map: error rate (0–1) at or above which a node or call shows a warning. |
+| `otel.serviceMap.errorRateCritical` | `0.05` | Service map: error rate (0–1) at or above which a node or call is critical. |
 | `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
 | `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
 | `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
@@ -432,7 +443,6 @@ See [SUPPORT.md](./SUPPORT.md) for what to include in a bug report. Remove secre
 Planned and under exploration — feedback welcome via [issues](https://github.com/sukanta1991/opentelemetry/issues):
 
 - Restore the last session automatically when VS Code reopens
-- Deeper service-map analytics (latency, error rates, throughput)
 
 ## Contributing
 

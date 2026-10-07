@@ -125,6 +125,20 @@ const baseCss = `
   code, pre { font-family: var(--vscode-editor-font-family, monospace); }
 `;
 
+// Time-range picker (toolbar select with a clock icon).
+export const RANGE_PICKER_CSS = `
+  .range-picker {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+    border-radius: 3px;
+    background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
+  }
+  .range-picker:focus-within { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+  .range-picker .range-icon { flex: 0 0 auto; opacity: 0.8; }
+  .range-picker select { border: none; background: transparent; color: inherit; font-size: 0.9em; padding: 2px 0; }
+  .range-picker select:focus { outline: none; }
+`;
+
 // Resizable/sortable columns, the column picker popover and the time-range picker.
 export const COLUMN_TABLE_CSS = `
   table { table-layout: fixed; }
@@ -178,18 +192,7 @@ export const COLUMN_TABLE_CSS = `
   }
   .hide-btn:hover { background: none; color: var(--vscode-foreground); }
   .col-note { padding: 4px; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
-
-  .range-picker {
-    display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px;
-    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-    border-radius: 3px;
-    background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
-  }
-  .range-picker:focus-within { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-  .range-picker .range-icon { flex: 0 0 auto; opacity: 0.8; }
-  .range-picker select { border: none; background: transparent; color: inherit; font-size: 0.9em; padding: 2px 0; }
-  .range-picker select:focus { outline: none; }
-`;
+${RANGE_PICKER_CSS}`;
 
 export const RANGE_ICON_SVG =
   '<svg class="range-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5A5.5 5.5 0 1 1 8 13.5 5.5 5.5 0 0 1 8 2.5zM7.25 4v4.31l3 1.73.75-1.3-2.25-1.3V4h-1.5z"/></svg>';
