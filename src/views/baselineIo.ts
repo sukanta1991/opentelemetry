@@ -34,7 +34,7 @@ export function createBaselineRegistry(context: vscode.ExtensionContext): Baseli
 }
 
 function fileNameFor(name: string): string {
-  const slug = name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = name.split(/[^A-Za-z0-9._]+/).filter(Boolean).join('-');
   return `${slug || 'baseline'}.${BASELINE_EXTENSION}`;
 }
 

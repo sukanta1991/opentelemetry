@@ -139,7 +139,7 @@ export function parseBaselineFile(text: string): BaselineFile {
     fail(typeof root.version === 'number' && root.version > BASELINE_VERSION ? 'File was made by a newer version of the extension.' : 'Unsupported baseline file version.');
   }
   const snap = obj(root.snapshot, 'snapshot');
-  const nodes = arr(snap.nodes, MAX_NODES, 'nodes').map(parseNode);
+  const nodes = arr(snap.nodes, MAX_NODES, 'nodes').map((n, i) => parseNode(n, i));
   const nodeIds = new Set<string>();
   for (const n of nodes) {
     if (nodeIds.has(n.id)) fail(`Node ${JSON.stringify(n.id.slice(0, 80))} is listed twice.`);

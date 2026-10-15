@@ -99,7 +99,9 @@ export class ServiceMapPanel {
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
     });
-    ServiceMapPanel.panels.set(key, new ServiceMapPanel(panel, controller, source));
+    const view = new ServiceMapPanel(panel, controller, source);
+    ServiceMapPanel.panels.set(key, view);
+    void view.loadBaselines();
   }
 
   private static keyOf(s: MapSource): string {
@@ -147,7 +149,6 @@ export class ServiceMapPanel {
       })
     );
     this.activeId = ServiceMapPanel.baselines?.registry.activeId;
-    void this.loadBaselines();
   }
 
   private onBaselinesChanged(): void {
