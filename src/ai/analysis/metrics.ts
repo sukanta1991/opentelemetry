@@ -6,6 +6,7 @@ import { reduceOverTime } from '../../views/webview/stats';
 import { iso, safeValue, truncateString } from '../serialize';
 import { QueryMetricsInput } from '../toolInputs';
 import { AnalysisContext, AnalysisOutput, errorOutput, selectInstances } from './common';
+import { byCodeUnit } from '../../compare';
 
 const MAX_KNOWN = 20;
 
@@ -44,7 +45,7 @@ export function queryMetrics(store: TelemetryStore, input: QueryMetricsInput, ct
   const name = input.name;
   const owners = instances.filter((i) => i.metrics.has(name));
   if (!owners.length) {
-    const known = [...new Set(instances.flatMap((i) => [...i.metrics.keys()]))].sort().slice(0, MAX_KNOWN);
+    const known = [...new Set(instances.flatMap((i) => [...i.metrics.keys()]))].sort(byCodeUnit).slice(0, MAX_KNOWN);
     return errorOutput(`metric ${JSON.stringify(name)} not found; known metrics: ${known.join(', ') || '(none)'}`);
   }
 

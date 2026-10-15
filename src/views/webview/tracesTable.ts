@@ -29,6 +29,7 @@ import {
 } from './traceView';
 import { TIME_RANGE_LABEL, TIME_RANGE_OPTIONS, isTimeRangeKind } from './timeRange';
 import { WaterfallMessage, createWaterfallView } from './waterfallView';
+import { byCodeUnit } from '../../compare';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -118,20 +119,22 @@ function sendQuery(): void {
 
 const STATUS_LABEL: Record<string, string> = { '': 'Any status', error: 'Error', ok: 'OK', unset: 'Unset' };
 
-function options(values: readonly string[], label: (v: string) => string): string {
-  return values.map((v) => `<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+function options(values: readonly string[], label: (v: string) => string): HTMLOptionElement[] {
+  return values.map((v) => new Option(label(v), v));
 }
 
-statusSel.innerHTML = options(STATUS_OPTIONS, (v) => STATUS_LABEL[v]);
-kindSel.innerHTML = options(KIND_OPTIONS, (v) => (v ? v[0].toUpperCase() + v.slice(1) : 'Any kind'));
-rangeSel.innerHTML = options(TIME_RANGE_OPTIONS, (v) =>
-  v === 'all' ? 'All traces' : TIME_RANGE_LABEL[v as keyof typeof TIME_RANGE_LABEL]
+statusSel.replaceChildren(...options(STATUS_OPTIONS, (v) => STATUS_LABEL[v]));
+kindSel.replaceChildren(...options(KIND_OPTIONS, (v) => (v ? v[0].toUpperCase() + v.slice(1) : 'Any kind')));
+rangeSel.replaceChildren(
+  ...options(TIME_RANGE_OPTIONS, (v) =>
+    v === 'all' ? 'All traces' : TIME_RANGE_LABEL[v as keyof typeof TIME_RANGE_LABEL]
+  )
 );
 
 function renderServiceOptions(): void {
   const list = [...services];
   if (state.input.service && !list.includes(state.input.service)) list.unshift(state.input.service);
-  serviceSel.innerHTML = options(['', ...list], (v) => v || 'All services');
+  serviceSel.replaceChildren(...options(['', ...list], (v) => v || 'All services'));
   serviceSel.value = state.input.service;
 }
 
@@ -384,7 +387,7 @@ function onMove(e: MouseEvent): void {
 
 function onUp(): void {
   if (!drag) return;
-  const width = parseInt(drag.el.style.width, 10);
+  const width = Number.parseInt(drag.el.style.width, 10);
   if (width) state.columns = setTraceColumnWidth(state.columns, drag.id, width);
   drag = null;
   document.body.classList.remove('col-resizing');
@@ -479,7 +482,7 @@ function groupedCatalogue(): Map<TraceColumnGroup, TraceColumnId[]> {
     if (k) keys.add(k);
   }
   const attrs = out.get('attributes') as TraceColumnId[];
-  for (const k of [...keys].sort()) attrs.push(attrColumnId(k));
+  for (const k of [...keys].sort(byCodeUnit)) attrs.push(attrColumnId(k));
   return out;
 }
 
@@ -645,6 +648,8 @@ interface TimeZoneMessage {
 }
 
 window.addEventListener('message', (e: MessageEvent) => {
+  // The VS Code host frame posts with targetOrigin = its own origin, which is ours.
+  if (e.origin !== window.origin) return;
   const m = e.data as ListMessage | TimeZoneMessage | WaterfallMessage;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     localTime = m.useLocalTime;

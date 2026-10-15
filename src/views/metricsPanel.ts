@@ -151,13 +151,13 @@ function histogramBuckets(m: Metric): BucketData | null {
   return {
     bounds,
     counts,
-    sum: finite(dp.sum ?? NaN) ? dp.sum : undefined,
-    count: finite(dp.count ?? NaN) ? dp.count : undefined,
+    sum: finite(dp.sum ?? Number.NaN) ? dp.sum : undefined,
+    count: finite(dp.count ?? Number.NaN) ? dp.count : undefined,
   };
 }
 
 function fmtBound(n: number | undefined): string {
-  if (n === undefined || !isFinite(n)) return '∞';
+  if (n === undefined || !Number.isFinite(n)) return '∞';
   return String(round(n));
 }
 

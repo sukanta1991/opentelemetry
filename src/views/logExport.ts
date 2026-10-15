@@ -6,6 +6,7 @@ import { KeyValueMap, StoredLogRecord } from '../store/model';
 import { LogColumnId, columnLabel } from './webview/logColumns';
 import { cellText, logTimeMs } from './webview/logView';
 import { serializeLog } from './logSerialize';
+import { byCodeUnit } from '../compare';
 
 export type ExportFormat = 'otlp' | 'json' | 'csv';
 export type ExportData = 'grid' | 'all';
@@ -114,7 +115,7 @@ const CORE_CSV_COLUMNS: LogColumnId[] = [
 export function attributeKeyUnion(records: readonly StoredLogRecord[]): string[] {
   const keys = new Set<string>();
   for (const r of records) for (const k of Object.keys(r.attrs)) keys.add(k);
-  return [...keys].sort();
+  return [...keys].sort(byCodeUnit);
 }
 
 // Spreadsheets execute cells beginning with these, so the value is neutralised with a quote.

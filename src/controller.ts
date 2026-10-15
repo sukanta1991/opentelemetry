@@ -31,7 +31,10 @@ export class OtelController {
     );
     this.receiver = new Receiver(resolveProtoRoot(extensionPath), this.store);
     this.statusBar = new StatusBar();
-    void this.setRunningContext(false);
+  }
+
+  async resetRunningContext(): Promise<void> {
+    await this.setRunningContext(false);
   }
 
   isRunning(): boolean {

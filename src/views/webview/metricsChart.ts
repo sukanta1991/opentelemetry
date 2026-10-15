@@ -468,9 +468,9 @@ function toFill(color: string, alpha: number): string {
         .split('')
         .map((x) => x + x)
         .join('');
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
+    const r = Number.parseInt(h.slice(0, 2), 16);
+    const g = Number.parseInt(h.slice(2, 4), 16);
+    const b = Number.parseInt(h.slice(4, 6), 16);
     if ([r, g, b].some(Number.isNaN)) return c;
     return `rgba(${r},${g},${b},${alpha})`;
   }
@@ -1076,6 +1076,8 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('message', (e: MessageEvent) => {
+  // The VS Code host frame posts with targetOrigin = its own origin, which is ours.
+  if (e.origin !== window.origin) return;
   const m = e.data;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     useLocalTime = m.useLocalTime;

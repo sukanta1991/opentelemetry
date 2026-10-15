@@ -24,6 +24,7 @@ let controller: OtelController;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   controller = new OtelController(context.extensionPath);
+  void controller.resetRunningContext();
   context.subscriptions.push({ dispose: () => controller.dispose() });
 
   const tree = new InstancesTreeProvider(controller);

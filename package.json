@@ -882,7 +882,7 @@
     "typecheck": "tsc -p ./ --noEmit && tsc -p ./tsconfig.webview.json",
     "lint": "eslint src --ext ts",
     "test:smoke": "ts-node test/integration/receiver.smoke.ts",
-    "test:activate": "ts-node test/e2e/activate.test.ts",
+    "test:activate": "ts-node test/e2e/activate.e2e.ts",
     "test:unit": "mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
     "push-logs:out-of-order": "ts-node test/scripts/push-out-of-order-logs.ts",
     "push:genai": "ts-node test/scripts/push-genai.ts",

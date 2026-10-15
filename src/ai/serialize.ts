@@ -8,6 +8,7 @@ import {
   MAX_STRING_CHARS,
   MAX_VALUE_DEPTH,
 } from './limits';
+import { byCodeUnit } from '../compare';
 
 // Defines an own property, so a telemetry key like "__proto__" can't replace the prototype.
 export function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -50,7 +51,7 @@ function safe(v: unknown, depth: number): unknown {
   if (Array.isArray(v)) return v.slice(0, MAX_ARRAY_ITEMS).map((x) => safeValue(x, depth + 1));
   const src = v as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(src).sort().slice(0, MAX_ATTRS_PER_OBJECT)) {
+  for (const k of Object.keys(src).sort(byCodeUnit).slice(0, MAX_ATTRS_PER_OBJECT)) {
     setOwn(out, k, safeValue(src[k], depth + 1));
   }
   return out;

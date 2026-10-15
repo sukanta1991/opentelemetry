@@ -25,6 +25,7 @@ import {
   timeZoneAttr,
   watchTimeZone,
 } from './webviewUtil';
+import { byCodeUnit } from '../compare';
 
 export interface TraceFocus {
   traceId: string;
@@ -183,7 +184,7 @@ export class TracesPanel {
       type: 'list',
       traces,
       total: inst.traces.size,
-      services: [...services].sort(),
+      services: [...services].sort(byCodeUnit),
       attrKeys: collectRootAttrKeys(entries.map((e) => e.summary)),
       errors,
     });

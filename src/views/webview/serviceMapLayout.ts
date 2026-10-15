@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Layered (top-down) layout for the service map. Pure: no vscode or DOM imports.
 
+import { byCodeUnit } from '../../compare';
+
 export interface LayoutNode {
   id: string;
   label: string;
@@ -56,8 +58,8 @@ export function nodeWidth(label: string): number {
 
 // Changes only when nodes or edges are added or removed, not when their stats change.
 export function topologyKey(nodes: readonly LayoutNode[], edges: readonly LayoutEdge[]): string {
-  const ids = nodes.map((n) => n.id).sort();
-  const links = edges.map((e) => edgeKey(e.source, e.target)).sort();
+  const ids = nodes.map((n) => n.id).sort(byCodeUnit);
+  const links = edges.map((e) => edgeKey(e.source, e.target)).sort(byCodeUnit);
   return `${ids.join('\u0001')}\u0002${links.join('\u0001')}`;
 }
 

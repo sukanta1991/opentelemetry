@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   build-and-test:
@@ -32,7 +30,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Type-check
         run: npm run typecheck
@@ -50,6 +48,10 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +63,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build
         run: npm run build
@@ -69,7 +71,7 @@ jobs:
       # NOTE: this extension ships runtime dependencies (@grpc/grpc-js,
       # @grpc/proto-loader, protobufjs), so we must NOT use --no-dependencies.
       - name: Package extension
-        run: npx @vscode/vsce package
+        run: npm run package
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v4.2.2
@@ -86,6 +88,10 @@ jobs:
     needs: package
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -97,13 +103,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build
         run: npm run build
 
       - name: Package extension
-        run: npx @vscode/vsce package
+        run: npm run package
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v4.2.2
@@ -111,6 +117,6 @@ jobs:
           subject-path: '*.vsix'
 
       - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish
+        run: npm run publish
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
