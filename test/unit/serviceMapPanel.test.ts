@@ -108,7 +108,7 @@ describe('ServiceMapPanel', function () {
   let restore: (() => void)[] = [];
 
   // Modules load after the vscode fake is installed, so they are required here rather than imported.
-  /* eslint-disable @typescript-eslint/no-var-requires */
+  /* eslint-disable @typescript-eslint/no-require-imports */
   before(() => {
     (Module as any)._load = function (request: string, ...rest: unknown[]) {
       if (request === 'vscode') return fakeVscode;
@@ -139,7 +139,7 @@ describe('ServiceMapPanel', function () {
     });
     ServiceMapPanel = require('../../src/views/serviceMapPanel').ServiceMapPanel;
   });
-  /* eslint-enable @typescript-eslint/no-var-requires */
+  /* eslint-enable @typescript-eslint/no-require-imports */
 
   after(() => {
     for (const r of restore) r();

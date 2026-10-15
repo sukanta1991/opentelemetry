@@ -142,7 +142,7 @@ const origLoad = (Module as any)._load;
 
 async function main() {
   const extPath = path.resolve(__dirname, '../..');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ext = require(path.join(extPath, 'dist', 'extension.js'));
 
   const context = { extensionPath: extPath, subscriptions: [] as any[] };

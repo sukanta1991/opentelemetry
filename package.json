@@ -893,7 +893,7 @@
     "site:preview": "npm run site:build && python3 -m http.server 8080 --bind 127.0.0.1 -d _site"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.10.9",
+    "@grpc/grpc-js": "^1.14.6",
     "@grpc/proto-loader": "^0.7.13",
     "protobufjs": "^7.3.2"
   },
@@ -901,13 +901,13 @@
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
     "@types/vscode": "1.95.0",
-    "@typescript-eslint/eslint-plugin": "^7.13.0",
-    "@typescript-eslint/parser": "^7.13.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.2",
+    "@typescript-eslint/parser": "^8.71.2",
     "@vscode/test-electron": "^2.4.0",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
-    "mocha": "^11.8.0",
+    "mocha": "^12.0.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
     "uplot": "^1.6.32"
