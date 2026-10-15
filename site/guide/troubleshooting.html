@@ -93,6 +93,14 @@
       <h2 id="data-disappeared">My collected data disappeared</h2>
       <p>Live telemetry is stored <strong>in memory</strong> and is cleared when the receiver restarts or when you run <strong>Clear Collected Data</strong>. To keep a copy, click <strong>Save Session…</strong> and load the file again later with <strong>Load Session…</strong>. Loaded data survives <strong>Clear Collected Data</strong> and is removed only when you remove it.</p>
 
+      <h2 id="baseline-waiting">The baseline comparison says “Waiting for calls” or “Too few calls to compare”</h2>
+      <ul>
+        <li><strong>Waiting for calls after …</strong>: in the same session, only calls that finish after the baseline was taken are compared. Generate traffic after marking the baseline.</li>
+        <li><strong>Too few calls to compare ?</strong>: each side needs at least <code>otel.serviceMap.baseline.minSamples</code> calls (default 20) for that service, call or operation. Send more traffic, pick a longer time window, or lower the setting.</li>
+        <li>In <strong>vs Baseline</strong> mode the time window starts at the later of the window start and the baseline cut-off, so a short window can hold fewer calls than in normal mode.</li>
+        <li><strong>⚠ n% not in baseline</strong>: much of what is running now wasn't in the baseline, so it was probably captured from a different setup. Capture a new baseline, or set <code>otel.serviceMap.baseline.coverageWarnPct</code> to <code>0</code> to hide the badge.</li>
+      </ul>
+
       <h2 id="empty-settings">The settings gear opens an empty page</h2>
       <p>This was fixed in <code>0.1.2</code>. Update to the latest version, or open settings manually and search for “OpenTelemetry”.</p>
 

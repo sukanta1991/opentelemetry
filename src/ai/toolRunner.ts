@@ -5,6 +5,7 @@
 import { TelemetryStore } from '../store/store';
 import { AiSettings } from './aiSettings';
 import { AnalysisContext, AnalysisOutput } from './analysis/common';
+import { BaselineLookup, compareBaseline } from './analysis/baseline';
 import { compareTraces } from './analysis/compare';
 import { genAiSummary } from './analysis/genai';
 import { queryLogs } from './analysis/logs';
@@ -89,6 +90,12 @@ const SPECS: Record<ToolName, ToolSpec> = {
     parse: inputs.parseGenAiSummaryInput,
     run: genAiSummary,
   },
+  otel_compareBaseline: {
+    title: 'Compare With OpenTelemetry Baseline',
+    verb: 'Comparing with the baseline',
+    parse: inputs.parseCompareBaselineInput,
+    run: compareBaseline,
+  },
 };
 
 export function isToolName(v: unknown): v is ToolName {
@@ -111,6 +118,8 @@ export interface ToolDeps {
   settings: AiSettings;
   receiverRunning: boolean;
   now: number;
+  // Only otel_compareBaseline reads it; the adapter preloads the bodies it may need.
+  baselines?: BaselineLookup;
   // Called after validation and before any store access; may throw to cancel.
   checkCancelled?: () => void;
 }
@@ -156,6 +165,7 @@ export function runTool(name: ToolName, raw: unknown, deps: ToolDeps): ToolRun {
       redactor,
       maxItems: deps.settings.maxResultItems,
       receiverRunning: deps.receiverRunning,
+      baselines: deps.baselines,
     };
     const out = spec.run(deps.store, parsed.value, ctx);
     // Redact the whole result before fitResult, so truncation can't split a secret.

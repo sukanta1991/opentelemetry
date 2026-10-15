@@ -86,6 +86,18 @@
             <tr><td><code>OpenTelemetry: Save Instance…</code></td><td>Save one instance's traces, logs and metrics.</td></tr>
             <tr><td><code>OpenTelemetry: Open Service Map</code></td><td>Show the live service dependency map.</td></tr>
             <tr><td><code>OpenTelemetry: Find Trace by ID</code></td><td>Open a trace's waterfall from a trace ID or W3C <code>traceparent</code>.</td></tr>
+            <tr><td><code>OpenTelemetry: Baselines…</code></td><td>All baseline actions in one menu (also in the Instances view's <strong>…</strong> menu and the map's <strong>Baseline…</strong> button).</td></tr>
+            <tr><td><code>OpenTelemetry: Mark Baseline Now</code></td><td>Capture everything collected so far; calls after this point are compared with it.</td></tr>
+            <tr><td><code>OpenTelemetry: Capture Baseline From a Recent Window…</code></td><td>Capture the last 1 min … 2 hours, or all retained data.</td></tr>
+            <tr><td><code>OpenTelemetry: Capture Baseline Up To a Time…</code></td><td>Capture everything up to a time you pick or type (<code>HH:MM:SS</code>).</td></tr>
+            <tr><td><code>OpenTelemetry: Use a Loaded Session as Baseline…</code></td><td>Use a loaded session file as the baseline for live data.</td></tr>
+            <tr><td><code>OpenTelemetry: Switch Active Baseline…</code></td><td>Choose which baseline the map compares with.</td></tr>
+            <tr><td><code>OpenTelemetry: Compare Two Baselines…</code></td><td>Open a read-only map of one baseline against another.</td></tr>
+            <tr><td><code>OpenTelemetry: Save Baseline</code></td><td>Keep the active baseline across reloads.</td></tr>
+            <tr><td><code>OpenTelemetry: Rename Baseline…</code> / <code>Delete Baseline…</code></td><td>Manage baselines.</td></tr>
+            <tr><td><code>OpenTelemetry: Export Baseline…</code> / <code>Import Baseline…</code></td><td>Write a baseline to a <code>.json</code> file, or load one (validated, up to 8 MB).</td></tr>
+            <tr><td><code>OpenTelemetry: Copy Baseline Comparison Report</code></td><td>Copy the comparison as a Markdown table.</td></tr>
+            <tr><td><code>OpenTelemetry: Stop Comparing With Baseline</code></td><td>Turn off the active baseline.</td></tr>
           </tbody>
         </table>
       </div>
@@ -112,6 +124,12 @@
             <tr><td><code>otel.serviceMap.latencyCriticalMs</code></td><td><code>1000</code></td><td>Service map: p95 latency (ms) at or above which a node or call is critical.</td></tr>
             <tr><td><code>otel.serviceMap.errorRateWarn</code></td><td><code>0.01</code></td><td>Service map: error rate (0–1) at or above which a node or call shows a warning.</td></tr>
             <tr><td><code>otel.serviceMap.errorRateCritical</code></td><td><code>0.05</code></td><td>Service map: error rate (0–1) at or above which a node or call is critical.</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.minSamples</code></td><td><code>20</code></td><td>Baselines: minimum calls on both sides before a service, call or operation is compared (5–1000).</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.minLatencyChangePct</code></td><td><code>20</code></td><td>Baselines: a significant p50 or p95 change counts only if it is at least this many percent (and <code>minLatencyChangeMs</code>).</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.minLatencyChangeMs</code></td><td><code>5</code></td><td>Baselines: a significant p50 or p95 change counts only if it is at least this many milliseconds (and <code>minLatencyChangePct</code>).</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.minErrorRateChangePp</code></td><td><code>2</code></td><td>Baselines: a significant error-rate change counts only if it is at least this many percentage points.</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.minFanoutChange</code></td><td><code>1</code></td><td>Baselines: change in calls per request on a call (e.g. an N+1 query) that counts as a regression or improvement.</td></tr>
+            <tr><td><code>otel.serviceMap.baseline.coverageWarnPct</code></td><td><code>30</code></td><td>Baselines: warn when at least this percentage of the current services and dependencies are missing from the baseline. <code>0</code> turns it off.</td></tr>
             <tr><td><code>otel.ai.enabled</code></td><td><code>false</code></td><td>Let Copilot and <code>@otel</code> read collected telemetry through the <code>otel_*</code> tools. User setting only.</td></tr>
             <tr><td><code>otel.ai.redactAttributeKeys</code></td><td><code>[]</code></td><td>Extra attribute keys to mask before data is sent to a model (added to the built-in list).</td></tr>
             <tr><td><code>otel.ai.maxResultItems</code></td><td><code>25</code></td><td>Most items one AI tool call may return (1–200).</td></tr>

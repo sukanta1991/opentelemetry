@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AiSettings, sanitizeAiSettings } from './ai/aiSettings';
 import { DEFAULT_MAX_ITEMS } from './ai/limits';
 import { ReceiverConfig } from './receiver/receiver';
+import { BaselineSettings, DEFAULT_BASELINE_SETTINGS, sanitizeBaselineSettings } from './views/baselineCompare';
 import { ServiceMapThresholds, sanitizeThresholds } from './views/serviceMapModel';
 
 export interface OtelSettings extends ReceiverConfig {
@@ -45,6 +46,13 @@ export function readServiceMapThresholds(): ServiceMapThresholds {
     errorRateWarn: c.get<unknown>('errorRateWarn'),
     errorRateCritical: c.get<unknown>('errorRateCritical'),
   });
+}
+
+export function readBaselineSettings(): BaselineSettings {
+  const c = vscode.workspace.getConfiguration('otel.serviceMap.baseline');
+  return sanitizeBaselineSettings(
+    Object.fromEntries(Object.keys(DEFAULT_BASELINE_SETTINGS).map((k) => [k, c.get<unknown>(k)]))
+  );
 }
 
 export function readAiSettings(): AiSettings {

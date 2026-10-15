@@ -6,8 +6,26 @@ import { OtelController } from './controller';
 import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
 import { readSettings } from './settings';
+import { BaselineStatus } from './status';
 import { normalizeTraceId } from './store/ids';
 import { LIVE_REALM } from './store/store';
+import { createBaselineRegistry } from './views/baselineIo';
+import {
+  BaselineDeps,
+  captureAtFromCommand,
+  captureBaseline,
+  captureFromSession,
+  captureWindowFromCommand,
+  compareBaselines,
+  copyBaselineReport,
+  deleteBaseline,
+  exportBaseline,
+  importBaseline,
+  renameBaseline,
+  saveBaseline,
+  showBaselineMenu,
+  switchBaseline,
+} from './views/baselineActions';
 import { openCodeLocation } from './views/codeNav';
 import { ImportedSessionNode, InstanceNode, InstancesTreeProvider } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
@@ -31,6 +49,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     tree,
     vscode.window.createTreeView('otel.instances', { treeDataProvider: tree })
+  );
+
+  // Reads only workspace state here; baseline bodies load on first use.
+  const baselines = createBaselineRegistry(context);
+  const baselineStatus = new BaselineStatus();
+  const syncBaselineState = () => {
+    const active = baselines.activeId ? baselines.get(baselines.activeId) : undefined;
+    void vscode.commands.executeCommand('setContext', 'otel.baselineActive', active !== undefined);
+    void vscode.commands.executeCommand('setContext', 'otel.hasBaselines', baselines.list().length > 0);
+    baselineStatus.update(active && { name: active.name });
+  };
+  syncBaselineState();
+  const baselineDeps: BaselineDeps = {
+    controller,
+    registry: baselines,
+    openComparison: (a, b) => ServiceMapPanel.showComparison(controller, a, b),
+  };
+  context.subscriptions.push(
+    baselineStatus,
+    baselines.onDidChange(syncBaselineState),
+    ServiceMapPanel.useBaselines({ registry: baselines, status: (s) => baselineStatus.update(s) }),
+    vscode.commands.registerCommand('otel.baseline.menu', () => showBaselineMenu(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.mark', () => captureBaseline(baselineDeps, LIVE_REALM, 'mark')),
+    vscode.commands.registerCommand('otel.baseline.captureWindow', () => captureWindowFromCommand(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.captureAt', () => captureAtFromCommand(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.fromSession', () => captureFromSession(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.switch', () => switchBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.compare', () => compareBaselines(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.save', () => saveBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.rename', () => renameBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.delete', () => deleteBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.export', () => exportBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.import', () => importBaseline(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.copyReport', () => copyBaselineReport(baselineDeps)),
+    vscode.commands.registerCommand('otel.baseline.deactivate', () => baselines.setActive(undefined))
   );
 
   const resolveInstanceId = async (arg: unknown): Promise<string | undefined> => {
@@ -141,7 +194,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const aiLog = vscode.window.createOutputChannel('OpenTelemetry AI', { log: true });
   context.subscriptions.push(aiLog);
-  registerAiTools(context, controller, aiLog);
+  registerAiTools(context, controller, aiLog, baselines);
   registerOtelParticipant(context, controller, aiLog);
 
   context.subscriptions.push(

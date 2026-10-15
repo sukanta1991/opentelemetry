@@ -8,6 +8,7 @@ import {
   histogramQuantile,
   medianInterval,
   quantile,
+  quantileSorted,
   reduceAcrossSeries,
   reduceOverTime,
   stddev,
@@ -22,6 +23,17 @@ describe('stats', () => {
     assert.strictEqual(quantile(xs, 0.5), 2.5);
     assert.strictEqual(quantile([], 0.5), null);
     assert.strictEqual(quantile([7], 0.9), 7);
+  });
+
+  it('quantileSorted matches quantile on sorted arrays and typed arrays', () => {
+    const raw = [9, Number.NaN, 1, 4, Infinity, 4, 2.5, 7];
+    const sorted = Float64Array.from(raw.filter(Number.isFinite)).sort();
+    for (const p of [0, 0.25, 0.5, 0.95, 1, -1, 2]) {
+      assert.strictEqual(quantileSorted(sorted, p), quantile(raw, p), `p=${p}`);
+      assert.strictEqual(quantileSorted([...sorted], p), quantile(raw, p), `p=${p}`);
+    }
+    assert.strictEqual(quantileSorted(new Float64Array(0), 0.5), null);
+    assert.strictEqual(quantileSorted([3], 0.95), 3);
   });
 
   it('reduceOverTime computes stats and ignores nulls', () => {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
-import { formatTimestamp } from '../../src/views/format';
+import { clockTime, formatTimestamp, parseClockTime } from '../../src/views/format';
 
 // Fixes the offset formatTimestamp reads, so these cases run the same in any machine timezone.
 function withTimezoneOffset<T>(minutesWest: number, fn: () => T): T {
@@ -41,6 +41,31 @@ describe('timestamp formatting', () => {
     ];
     for (const [minutesWest, expected] of cases) {
       assert.strictEqual(withTimezoneOffset(minutesWest, () => formatTimestamp(0, true)), expected);
+    }
+  });
+});
+
+describe('clock times', () => {
+  const ANCHOR = Date.UTC(2026, 9, 15, 10, 30, 0);
+
+  it('formats HH:MM:SS in UTC with a suffix', () => {
+    assert.strictEqual(clockTime(ANCHOR, false), '10:30:00 UTC');
+    assert.strictEqual(clockTime(ANCHOR, true), formatTimestamp(ANCHOR, true).slice(11, 19));
+  });
+
+  it('parses a time on the anchor day, or the day before when it would be later', () => {
+    assert.strictEqual(parseClockTime('10:15', ANCHOR, false), Date.UTC(2026, 9, 15, 10, 15, 0));
+    assert.strictEqual(parseClockTime(' 9:05:07 ', ANCHOR, false), Date.UTC(2026, 9, 15, 9, 5, 7));
+    assert.strictEqual(parseClockTime('10:30', ANCHOR, false), ANCHOR);
+    assert.strictEqual(parseClockTime('23:59', ANCHOR, false), Date.UTC(2026, 9, 14, 23, 59, 0));
+    const local = parseClockTime('08:00', ANCHOR, true)!;
+    assert.ok(local <= ANCHOR && ANCHOR - local < 86_400_000);
+    assert.strictEqual(new Date(local).getHours(), 8);
+  });
+
+  it('rejects malformed or out-of-range times', () => {
+    for (const t of ['', '10', '1030', '24:00', '10:60', '10:00:60', '10:00pm', 'ab:cd', '1:2']) {
+      assert.strictEqual(parseClockTime(t, ANCHOR, false), undefined, t);
     }
   });
 });

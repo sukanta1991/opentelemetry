@@ -3,8 +3,10 @@
 // message validation, actions and lifecycle. Uses real timers (store debounce 150 ms, throttle 500 ms).
 import * as assert from 'assert';
 import Module = require('module');
-import { TelemetryStore } from '../../src/store/store';
-import { addDistributedTrace, addSpans, span } from './aiFixtures';
+import { LIVE_REALM, TelemetryStore } from '../../src/store/store';
+import { captureSnapshot } from '../../src/views/baseline';
+import { BaselineRegistry } from '../../src/views/baselineRegistry';
+import { T0, addDistributedTrace, addSpans, span } from './aiFixtures';
 
 type Listener = (e?: any) => void;
 
@@ -79,8 +81,11 @@ const fakeVscode = {
       return Promise.resolve(undefined);
     },
     showErrorMessage: () => Promise.resolve(undefined),
+    showWarningMessage: () => Promise.resolve(undefined),
+    showInputBox: () => Promise.resolve(undefined),
     showQuickPick: (items: any[]) => Promise.resolve(quickPick(items)),
   },
+  QuickPickItemKind: { Separator: -1, Default: 0 },
   workspace: {
     getConfiguration: (section?: string) => ({
       get: (key: string, def?: unknown) => {
@@ -91,7 +96,16 @@ const fakeVscode = {
     onDidChangeConfiguration: event(configListeners),
   },
   commands: { executeCommand: () => Promise.resolve(undefined) },
+  env: {
+    clipboard: {
+      writeText: (t: string) => {
+        clipboard.push(t);
+        return Promise.resolve();
+      },
+    },
+  },
 };
+const clipboard: string[] = [];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const tick = () => new Promise((r) => setImmediate(r));
@@ -342,5 +356,212 @@ describe('ServiceMapPanel', function () {
     p.dispose();
     await sleep(500);
     assert.strictEqual(p.posted.length, 1);
+  });
+
+  describe('baseline mode', () => {
+    let registry: BaselineRegistry;
+    let statuses: any[];
+    let sub: { dispose(): void };
+    const tidOf = (i: number) => (i + 1).toString(16).padStart(32, '0');
+
+    // `n` checkout traces whose database call takes `dbMs`.
+    function tracesStore(n: number, dbMs: number, from = 0): TelemetryStore {
+      const store = new TelemetryStore();
+      for (let i = 0; i < n; i++) addDistributedTrace(store, tidOf(from + i), T0 + (from + i) * 2000, dbMs + (i % 5));
+      return store;
+    }
+
+    async function activate(name: string, store: TelemetryStore, realm = 'other'): Promise<string> {
+      const snapshot = captureSnapshot(store.getAllTaggedSpans(), { kind: 'session', label: name, realm });
+      const { meta } = registry.add(name, snapshot);
+      await registry.setActive(meta.id);
+      return meta.id;
+    }
+
+    const last = (p: FakePanel) => p.updates()[p.updates().length - 1];
+    const dbEdge = (u: any) => u.model.edges.find((e: any) => e.target === 'db:postgresql:shop');
+
+    beforeEach(() => {
+      const values = new Map<string, unknown>();
+      const files = new Map<string, string>();
+      registry = new BaselineRegistry(
+        { get: (k: string) => values.get(k) as any, update: (k: string, v: unknown) => (values.set(k, v), Promise.resolve()) },
+        {
+          read: async (id) => files.get(id) ?? Promise.reject(new Error('ENOENT')),
+          write: async (id, t) => void files.set(id, t),
+          remove: async (id) => void files.delete(id),
+        }
+      );
+      statuses = [];
+      sub = ServiceMapPanel.useBaselines({ registry, status: (s: unknown) => statuses.push(s) });
+    });
+
+    afterEach(() => sub.dispose());
+
+    it('compares with the active baseline by default and reports to the status bar', async () => {
+      await activate('main', tracesStore(30, 100));
+      const p = open(tracesStore(30, 800));
+      p.send({ type: 'ready', range: 'all', selection: null });
+      await tick();
+      const u = last(p);
+      assert.strictEqual(u.colorMode, 'baseline');
+      assert.strictEqual(u.readOnly, false);
+      assert.deepStrictEqual([u.baseline.name, u.baseline.waiting, u.baseline.cutoffMs], ['main', false, undefined]);
+      assert.strictEqual(dbEdge(u).cmp.verdict, 'regressed');
+      assert.ok(u.baseline.summary.regressed > 0);
+      assert.deepStrictEqual(statuses[statuses.length - 1], { name: 'main', summary: { regressed: u.baseline.summary.regressed, improved: 0 }, waiting: false });
+    });
+
+    it('drops comparison data in absolute mode and keeps the status bar to the name', async () => {
+      await activate('main', tracesStore(30, 100));
+      const p = open(tracesStore(30, 800));
+      p.send({ type: 'ready', range: 'all', selection: null, colorMode: 'absolute' });
+      await tick();
+      const u = last(p);
+      assert.deepStrictEqual([u.colorMode, u.baseline, u.hasBaseline], ['absolute', null, true]);
+      assert.strictEqual(dbEdge(u).cmp, undefined);
+      assert.deepStrictEqual(statuses[statuses.length - 1], { name: 'main' });
+      p.send({ type: 'setColorMode', colorMode: 'baseline' });
+      assert.strictEqual(dbEdge(last(p)).cmp.verdict, 'regressed');
+    });
+
+    it('rebuilds the compared map for new data but not for a new selection', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bm = require('../../src/views/baselineMap');
+      const orig = bm.buildComparedMap;
+      let builds = 0;
+      bm.buildComparedMap = (...args: unknown[]) => (builds++, orig(...args));
+      try {
+        await activate('main', tracesStore(30, 100));
+        const store = tracesStore(30, 800);
+        const p = open(store);
+        p.send({ type: 'ready', range: 'all', selection: null });
+        await tick();
+        const before = builds;
+        p.send({ type: 'select', selection: { kind: 'node', id: 'svc:checkout' } });
+        p.send({ type: 'select', selection: { kind: 'edge', source: 'svc:checkout', target: 'db:postgresql:shop' } });
+        assert.strictEqual(builds, before, 'selection reuses the cached comparison');
+        assert.strictEqual(last(p).details.operations[0].cmp.verdict, 'regressed');
+        addDistributedTrace(store, 'f'.repeat(32), T0 + 99_000, 800);
+        await sleep(700);
+        assert.strictEqual(builds, before + 1);
+      } finally {
+        bm.buildComparedMap = orig;
+      }
+    });
+
+    it('waits for calls after a cut-off in the same realm', async () => {
+      const store = tracesStore(20, 100);
+      await activate('mark', store, LIVE_REALM);
+      const p = open(store);
+      p.send({ type: 'ready', range: 'all', selection: null });
+      await tick();
+      assert.strictEqual(last(p).baseline.waiting, true);
+      assert.ok(last(p).model.cutoffMs > 0);
+      assert.deepStrictEqual(statuses[statuses.length - 1], { name: 'mark', summary: undefined, waiting: true });
+      for (let i = 0; i < 20; i++) addDistributedTrace(store, tidOf(100 + i), T0 + 100_000 + i * 2000, 800 + (i % 5));
+      await sleep(700);
+      const u = last(p);
+      assert.strictEqual(u.baseline.waiting, false);
+      assert.strictEqual(dbEdge(u).cmp.verdict, 'regressed');
+      assert.strictEqual(dbEdge(u).stats.count, 20, 'only calls after the cut-off count');
+    });
+
+    it('captures up to a sparkline bucket and makes it active', async () => {
+      const p = open(tracesStore(30, 100));
+      p.send({ type: 'ready', range: 'all', selection: null });
+      const { seq, model } = p.posted[0];
+      p.send({ type: 'captureAtBucket', seq, index: 30 });
+      p.send({ type: 'captureAtBucket', seq: seq + 1, index: 0 });
+      await tick();
+      assert.strictEqual(registry.list().length, 0, 'invalid captures are ignored');
+      p.send({ type: 'captureAtBucket', seq, index: 14 });
+      await tick();
+      const [meta] = registry.list();
+      assert.strictEqual(meta.sourceKind, 'time');
+      assert.strictEqual(registry.activeId, meta.id);
+      const snap = (await registry.load(meta.id))!.snapshot;
+      assert.ok(Math.abs(snap.source.toMs - (model.fromMs + (15 * model.effectiveWindowMs) / 30)) < 1e-6);
+    });
+
+    it('reveals baseline example traces still in the store', async () => {
+      const store = tracesStore(30, 100);
+      await activate('main', store);
+      const p = open(store);
+      p.send({ type: 'ready', range: 'all', selection: { kind: 'node', id: 'svc:checkout' } });
+      await tick();
+      const u = last(p);
+      assert.ok(u.details.baselineTraces.length > 0);
+      p.send({ type: 'revealTrace', seq: u.seq, list: 'baseline', index: 9 });
+      p.send({ type: 'revealTrace', seq: u.seq, list: 'baseline', index: 0 });
+      await tick();
+      assert.deepStrictEqual(revealed, [{ traceId: u.details.baselineTraces[0] }]);
+    });
+
+    it('opens a read-only comparison that ignores live-only actions and goes away with its baseline', async () => {
+      const a = await activate('before', tracesStore(30, 100));
+      const b = await activate('after', tracesStore(30, 800));
+      ServiceMapPanel.showComparison({ store: new TelemetryStore(), extensionUri: { fsPath: '/ext' } }, a, b);
+      const p = panels[panels.length - 1];
+      p.send({ type: 'ready', range: 'all', selection: null });
+      await tick();
+      const u = last(p);
+      assert.deepStrictEqual([u.readOnly, u.baseline.name, u.baseline.against], [true, 'before', 'after']);
+      assert.strictEqual(dbEdge(u).cmp.verdict, 'regressed');
+      const posted = p.posted.length;
+      p.send({ type: 'setRange', range: '5m' });
+      p.send({ type: 'captureAtBucket', seq: u.seq, index: 0 });
+      assert.strictEqual(p.posted.length, posted);
+      await registry.remove(b);
+      await tick();
+      assert.strictEqual(p.posted[p.posted.length - 1].type, 'gone');
+    });
+
+    it('opens the baseline menu with capture actions for live maps', async () => {
+      const p = open(tracesStore(5, 100));
+      p.send({ type: 'ready', range: 'all', selection: null });
+      let labels: string[] = [];
+      quickPick = (items) => {
+        labels = items.map((i) => i.label);
+        return undefined;
+      };
+      p.send({ type: 'baselineMenu' });
+      await tick();
+      assert.ok(labels.includes('$(pin) Mark now'), labels.join(' | '));
+      assert.ok(labels.includes('$(cloud-download) Import from file…'));
+    });
+
+    it('keeps baseline names from rendering as icons in pickers', async () => {
+      await activate('$(alert) urgent', tracesStore(5, 100));
+      const p = open(tracesStore(5, 100));
+      p.send({ type: 'ready', range: 'all', selection: null });
+      let descriptions: string[] = [];
+      quickPick = (items) => {
+        descriptions = items.map((i) => i.description ?? '');
+        return undefined;
+      };
+      p.send({ type: 'baselineMenu' });
+      await tick();
+      assert.ok(descriptions.includes('Active: $\u200b(alert) urgent'), descriptions.join(' | '));
+    });
+
+    it('captures from a recent window and copies a report, from commands without a map', async () => {
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      const actions = require('../../src/views/baselineActions');
+      /* eslint-enable @typescript-eslint/no-require-imports */
+      const before = tracesStore(30, 100);
+      const deps = { controller: { store: before }, registry, openComparison: () => undefined };
+      quickPick = (items) => items.find((i) => i.range === 'all');
+      await actions.captureWindowFromCommand(deps);
+      const [meta] = registry.list();
+      assert.deepStrictEqual([meta.sourceKind, registry.activeId], ['window', meta.id]);
+
+      deps.controller.store = tracesStore(30, 800, 100);
+      await actions.copyBaselineReport(deps);
+      assert.strictEqual(clipboard.length, 1);
+      assert.ok(clipboard[0].startsWith('## Service map vs baseline “Window to '), clipboard[0]);
+      assert.ok(clipboard[0].includes('| ⬆ | checkout → postgresql: shop |'), clipboard[0]);
+      clipboard.length = 0;
+    });
   });
 });
