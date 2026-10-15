@@ -12,6 +12,11 @@ permissions:
 
 jobs:
   build-and-test:
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -22,6 +27,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -42,7 +49,20 @@ jobs:
         run: npm run build
 
       - name: Test
+        if: matrix.os != 'ubuntu-latest' || matrix.node-version != 24
         run: npm test
+
+      - name: Test with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: npm run test:coverage
+
+      - name: Sonar scan
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v5
+
+      - name: Sonar scan skipped
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && env.SONAR_TOKEN == ''
+        run: echo "::warning::SONAR_TOKEN is not configured; skipping Sonar analysis."
 
   package:
     needs: build-and-test
