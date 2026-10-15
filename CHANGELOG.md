@@ -5,6 +5,24 @@ All notable changes to the **OpenTelemetry for VS Code** extension are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-15
+
+### Added
+
+- **Service map baselines.** Capture a "before" snapshot, change your code, and see what changed:
+  - Capture with **Mark now**, **Capture current window**, **Capture from a recent window…**, **Capture up to a time…** (or click a bar in a service's new **Activity** chart), or **Use a loaded session…**. A baseline is a frozen copy of the numbers; clearing data or evicting spans doesn't change it.
+  - A **vs Baseline** toggle colours services, calls and operations as **Regressed ⬆**, **Improved ⬇**, **No significant change ●**, **New ✚**, **Not seen since baseline ⊖** (dashed) or **Too few calls to compare ?**, with p95 change labels and before → after p50, p95, error rate and calls per request in the details panel.
+  - Noise-aware verdicts: Mann-Whitney (p50), a tail test (p95) and two-proportion or Fisher's exact tests (error rate), with Benjamini-Hochberg correction and minimum effect sizes. In the same session only calls after the cut-off are compared, so nothing is counted twice.
+  - Save (up to 50 per workspace), rename, delete, export and import baselines as `.json` files; **Compare two baselines** in a read-only map; **Copy comparison report** as a Markdown table for pull requests. The status bar shows the active baseline with regressed and improved counts.
+  - 14 `OpenTelemetry: … Baseline` commands, also grouped under **Baselines…** in the Instances view's **…** menu and the map's **Baseline…** button.
+- Settings `otel.serviceMap.baseline.minSamples` (20), `minLatencyChangePct` (20), `minLatencyChangeMs` (5), `minErrorRateChangePp` (2), `minFanoutChange` (1) and `coverageWarnPct` (30).
+- AI tool `otel_compareBaseline` (`#otelBaseline`): compares current traffic, or another baseline, with a service map baseline by service, call or operation, with example trace IDs. Ask `@otel what regressed since my baseline?`.
+
+### Changed
+
+- The service map's **Operations** table now groups calls by route and method for HTTP (`GET /users/{id}`) and by operation and table for databases (`SELECT users`), falling back to the span name, instead of by span name alone.
+- Saving a baseline writes its aggregates (names, counts, sampled latencies and up to 2 example trace IDs per item) to the extension's local storage. Unsaved baselines stay in memory. The privacy docs describe this.
+
 ## [1.1.0] - 2026-10-07
 
 ### Added

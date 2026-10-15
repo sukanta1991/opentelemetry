@@ -169,7 +169,7 @@
           <article class="card reveal">
             <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="m7.2 10.8 9.6-4.6M7.2 13.2l9.6 4.6"/></svg></div>
             <h3>Service map</h3>
-            <p>A live map of services, databases, queues and external calls, with p95 latency, error rate and req/min on every node and edge. Click a service to jump to its traces, logs and code.</p>
+            <p>A live map of services, databases, queues and external calls, with p95 latency, error rate and req/min on every node and edge. Click a service to jump to its traces, logs and code, or compare with a baseline to see what your change made slower.</p>
           </article>
           <article class="card reveal">
             <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
@@ -184,7 +184,7 @@
           <article class="card reveal">
             <div class="card-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg></div>
             <h3>Ask Copilot <span class="badge">opt-in</span></h3>
-            <p>The <code>@otel</code> chat participant and nine read-only tools explain slow and failing requests, citing the trace and span IDs.</p>
+            <p>The <code>@otel</code> chat participant and ten read-only tools explain slow and failing requests, citing the trace and span IDs.</p>
           </article>
           <article class="card reveal">
             <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></div>
@@ -338,7 +338,7 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
           </div>
           <ul class="checklist">
             <li><strong>Off by default.</strong> Enable the <code>otel.ai.enabled</code> user setting; a workspace can't turn it on.</li>
-            <li><strong>Read-only &amp; confirmed.</strong> Nine <code>otel_*</code> tools; VS Code asks before each call.</li>
+            <li><strong>Read-only &amp; confirmed.</strong> Ten <code>otel_*</code> tools; VS Code asks before each call.</li>
             <li><strong>Redacted first.</strong> Secrets, tokens and AI prompt text are masked before anything reaches the model.</li>
           </ul>
           <a class="btn btn-ghost" href="guide/ai.html">Learn about AI features →</a>

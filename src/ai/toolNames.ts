@@ -11,6 +11,7 @@ export const TOOL_NAMES = [
   'otel_queryMetrics',
   'otel_getServiceMap',
   'otel_genAiSummary',
+  'otel_compareBaseline',
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

@@ -149,6 +149,29 @@
         <li><strong>Health:</strong> every service, dependency and call is <strong>Healthy ●</strong>, <strong>Warning ▲</strong>, <strong>Critical ✖</strong> or <strong>Idle ○</strong>, from the worse of its error rate and p95 latency against the <code>otel.serviceMap.*</code> thresholds. Fewer than 5 calls show at most a warning.</li>
         <li><strong>Details:</strong> click a node or edge (or Tab to it and press Enter) for its stats, callers and callees, top operations, recent errors, slowest traces and source files. Services get <strong>Traces / Logs / Metrics</strong> buttons. Esc closes the panel.</li>
         <li>Numbers come from the spans still in memory, so they are bounded by <code>otel.retention.maxTracesPerInstance</code>. Maps with more than 250 nodes hide the least-called dependencies.</li>
+        <li><strong>Operations</strong> in the details panel are grouped by route and method for HTTP (<code>GET /users/{id}</code>), by operation and table for databases (<code>SELECT users</code>), and by span name otherwise.</li>
+      </ul>
+
+      <h2 id="baselines">Service map baselines</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Service Map · vs Baseline</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/service-map-baseline.png" width="2800" height="1640" loading="lazy" alt="Service map compared with a baseline, showing a regressed checkout service and its database call">
+        </div>
+      </figure>
+      <p>Capture a “before” snapshot, change your code, and see which services, calls and operations regressed, improved, appeared or disappeared.</p>
+      <ol>
+        <li>Run your app and generate representative traffic.</li>
+        <li>Open the service map, click <strong>Baseline…</strong> and choose <strong>Mark now</strong>. The map switches to <strong>vs Baseline</strong>.</li>
+        <li>Change the code, restart the app and generate the same traffic again.</li>
+        <li>Read the verdicts on the map and in the status bar, click a node or call for before → after numbers, and use <strong>Copy comparison report</strong> to paste a Markdown table into a pull request.</li>
+      </ol>
+      <ul>
+        <li><strong>Capture</strong> from the map's <strong>Baseline…</strong> button, <strong>Baselines…</strong> in the Instances view's <strong>…</strong> menu, or the <code>OpenTelemetry: … Baseline</code> commands: <strong>Mark now</strong>, <strong>Capture current window</strong>, <strong>Capture from a recent window…</strong>, <strong>Capture up to a time…</strong> (or click a bar in a service's <strong>Activity</strong> chart), or <strong>Use a loaded session…</strong>. A baseline is a frozen copy of the numbers: clearing data or evicting old spans doesn't change it.</li>
+        <li><strong>Verdicts:</strong> <strong>Regressed ⬆</strong>, <strong>Improved ⬇</strong>, <strong>No significant change ●</strong>, <strong>New ✚</strong>, <strong>Not seen since baseline ⊖</strong> (dashed) or <strong>Too few calls to compare ?</strong>. The details panel shows before → after calls, p50, p95, error rate and calls per request, plus an Operations table with Δ p95.</li>
+        <li><strong>Noise-aware:</strong> p50 uses a Mann-Whitney test, p95 a tail test and error rate a two-proportion (or Fisher's exact) test, corrected for the number of comparisons (Benjamini-Hochberg). A change must also clear the <code>otel.serviceMap.baseline.*</code> minimums: by default ≥ 20% and ≥ 5 ms, ≥ 2 percentage points of errors, or ≥ 1 extra call per request. Items with fewer than 20 calls on either side aren't judged.</li>
+        <li>In the same session only calls that finished after the baseline was taken count as current, so nothing is counted twice. A <strong>⚠ n% not in baseline</strong> badge warns when much of the current map is missing from the baseline.</li>
+        <li><strong>Manage:</strong> switch the active baseline, save (up to 50; up to 5 unsaved are kept in memory), rename, delete, export to or import from a <code>.json</code> file, or <strong>Compare two baselines</strong> in a read-only map. The status bar shows the active baseline with its regressed and improved counts.</li>
+        <li>Saved baselines are written to the extension's local storage on this machine. They hold aggregates only (names, counts, sampled latencies and up to 2 example trace IDs per item). Export warns about this before writing a file. See <a href="privacy.html#telemetry">Privacy</a>.</li>
       </ul>
 
       <h2 id="sessions">Sessions, import &amp; export</h2>
@@ -164,7 +187,7 @@
       <p>Spans and logs with source-location attributes (<code>code.filepath</code> / <code>code.lineno</code>, or the newer <code>code.file.path</code> / <code>code.line.number</code>) get a <strong>Navigate To Code</strong> action. Paths are resolved inside your workspace folders; when only a file name matches, the closest path wins (or you pick from a list). An absolute path outside the workspace asks for confirmation before it opens.</p>
 
       <h2 id="ai">Ask Copilot <span class="badge">opt-in</span></h2>
-      <p>The <code>@otel</code> chat participant and nine <code>otel_*</code> tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See <a href="ai.html">Ask Copilot</a>.</p>
+      <p>The <code>@otel</code> chat participant and ten <code>otel_*</code> tools answer questions about your traces, logs, metrics, AI-agent runs and service map baselines, with buttons back to the data. See <a href="ai.html">Ask Copilot</a>.</p>
 
       <nav class="page-nav" aria-label="Pagination">
         <a href="getting-started.html"><small>Previous</small>← Getting started</a>

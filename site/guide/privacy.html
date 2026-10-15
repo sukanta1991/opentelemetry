@@ -74,6 +74,7 @@
         <li>The receiver binds to <code>127.0.0.1</code> by default. Setting <code>otel.host</code> to another address exposes your telemetry to that network.</li>
         <li>Live telemetry is held in memory only. It is capped by the <code>otel.retention.*</code> settings and dropped when the receiver restarts or you run <strong>Clear Collected Data</strong>.</li>
         <li>Telemetry is never written to disk unless you export it yourself.</li>
+        <li><strong>Saved baselines</strong> are written to the extension's local storage for the workspace (global storage when no folder is open) on this machine. They hold aggregates only: service, dependency, route and operation names, call counts, error counts, sampled latencies and up to 2 example trace IDs per item, but no attributes, log bodies or span payloads. Unsaved baselines stay in memory. <strong>Export Baseline…</strong> warns that the file contains names and trace IDs before writing it.</li>
       </ul>
 
       <h2 id="ai">AI features (optional)</h2>
@@ -93,7 +94,7 @@ the chat model you selected in VS Code ──▶ answer shown in chat</code></pr
         <table>
           <thead><tr><th scope="col">The <code>otel_*</code> tools can</th><th scope="col">The <code>otel_*</code> tools cannot</th></tr></thead>
           <tbody>
-            <tr><td class="yes">Read the telemetry the receiver holds in memory</td><td>Read, create or edit workspace files</td></tr>
+            <tr><td class="yes">Read the telemetry the receiver holds in memory, and your service map baselines</td><td>Read, create or edit workspace files</td></tr>
             <tr><td class="yes">Read the <code>otel.ai.*</code> settings</td><td>Run commands, tasks or terminals</td></tr>
             <tr><td></td><td>Read environment variables</td></tr>
             <tr><td></td><td>Make network requests</td></tr>

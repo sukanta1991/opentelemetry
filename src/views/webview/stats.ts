@@ -9,7 +9,14 @@ function nonNull(ys: (number | null)[]): number[] {
 
 // Linear-interpolated quantile of a numeric sample (p in [0,1]).
 export function quantile(values: number[], p: number): number | null {
-  const xs = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  return quantileSorted(
+    values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b),
+    p
+  );
+}
+
+// Same as quantile() for input already sorted ascending with only finite values; does not copy.
+export function quantileSorted(xs: ArrayLike<number>, p: number): number | null {
   if (!xs.length) return null;
   const clamped = Math.min(1, Math.max(0, p));
   if (xs.length === 1) return xs[0];

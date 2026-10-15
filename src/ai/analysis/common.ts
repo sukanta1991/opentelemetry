@@ -9,12 +9,14 @@ import { WaterfallRow } from '../../views/waterfall';
 import { Redactor } from '../redact';
 import { Ref } from '../refs';
 import { safeValue, setOwn, truncateString } from '../serialize';
+import type { BaselineLookup } from './baseline';
 
 export interface AnalysisContext {
   now: number;
   redactor: Redactor;
   maxItems: number;
   receiverRunning?: boolean;
+  baselines?: BaselineLookup;
 }
 
 export interface AnalysisOutput {

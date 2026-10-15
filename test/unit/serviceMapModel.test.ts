@@ -2,7 +2,14 @@
 import * as assert from 'assert';
 import { Span } from '../../src/store/model';
 import { LIVE_REALM, TelemetryStore } from '../../src/store/store';
-import { buildNodeDetails, buildServiceMap, ModelNode, ServiceMapModel } from '../../src/views/serviceMapModel';
+import {
+  MAX_OPERATION_KEY_LENGTH,
+  ModelNode,
+  ServiceMapModel,
+  buildNodeDetails,
+  buildServiceMap,
+  operationKey,
+} from '../../src/views/serviceMapModel';
 import { DB_SPAN, DIST_TRACE, T0, addDistributedTrace, addSpans, span } from './aiFixtures';
 
 const MIN = 60_000;
@@ -223,6 +230,18 @@ describe('serviceMapModel', () => {
     });
   });
 
+  it('counts calls with non-finite durations but leaves them out of latency', () => {
+    const store = new TelemetryStore();
+    addSpans(store, 'api', [
+      ...roots('api', [{ endMs: T0, durationMs: 20 }, { endMs: T0, durationMs: 40 }]),
+      span({ traceId: tid(9), spanId: sid(9), kind: 'SERVER', startMs: T0 - 5, endMs: T0, durationMs: Number.NaN }),
+    ]);
+    const stats = node(buildServiceMap(store.getAllTaggedSpans(), { range: 'all' }), 'svc:api').stats;
+    assert.strictEqual(stats.count, 3);
+    assert.strictEqual(stats.p50, 30);
+    assert.strictEqual(stats.p95, 39);
+  });
+
   describe('buildNodeDetails', () => {
     function distStore(): TelemetryStore {
       const store = new TelemetryStore();
@@ -331,6 +350,69 @@ describe('serviceMapModel', () => {
         buildNodeDetails(tagged, m, { kind: 'edge', source: 'svc:checkout', target: 'svc:frontend' }),
         undefined
       );
+    });
+
+    it('groups operations by route, keeping prototype-named span names apart', () => {
+      const store = new TelemetryStore();
+      const route = { 'http.route': '/users/{id}', 'http.request.method': 'GET' };
+      const names = ['GET /users/1', 'GET /users/2', 'constructor', '__proto__', '__proto__'];
+      addSpans(
+        store,
+        'api',
+        names.map((name, i) =>
+          span({
+            traceId: tid(i),
+            spanId: sid(i),
+            kind: 'SERVER',
+            name,
+            startMs: T0,
+            durationMs: 10,
+            attrs: i < 2 ? route : {},
+          })
+        )
+      );
+      const tagged = store.getAllTaggedSpans();
+      const m = buildServiceMap(tagged, { range: 'all' });
+      const d = buildNodeDetails(tagged, m, { kind: 'node', id: 'svc:api' })!;
+      assert.deepStrictEqual(
+        d.operations.map((o) => [o.name, o.count]),
+        [
+          ['GET /users/{id}', 2],
+          ['__proto__', 2],
+          ['constructor', 1],
+        ]
+      );
+    });
+  });
+
+  describe('operationKey', () => {
+    const key = (attrs: Span['attrs'], name = 'span-name') =>
+      operationKey(span({ traceId: tid(0), spanId: sid(0), name, attrs }));
+
+    it('prefers http.route with the method', () => {
+      assert.strictEqual(key({ 'http.route': '/users/{id}', 'http.request.method': 'GET' }), 'GET /users/{id}');
+      assert.strictEqual(key({ 'http.route': '/users/{id}', 'http.method': 'POST' }), 'POST /users/{id}');
+      assert.strictEqual(key({ 'http.route': ' /health ' }), '/health');
+    });
+
+    it('falls back to the db operation with its collection', () => {
+      assert.strictEqual(key({ 'db.operation.name': 'SELECT', 'db.collection.name': 'orders' }), 'SELECT orders');
+      assert.strictEqual(key({ 'db.operation': 'find', 'db.sql.table': 'users' }), 'find users');
+      assert.strictEqual(key({ 'db.operation.name': 'GET' }), 'GET');
+      assert.strictEqual(key({ 'db.collection.name': 'orders' }), 'span-name');
+    });
+
+    it('falls back to the span name for missing, blank or non-string attributes', () => {
+      assert.strictEqual(key({}), 'span-name');
+      assert.strictEqual(key({ 'http.route': '   ', 'db.operation.name': '' }), 'span-name');
+      assert.strictEqual(key({ 'http.route': 42, 'db.operation.name': ['SELECT'] }), 'span-name');
+      assert.strictEqual(key({ 'http.route': { toString: 'x' } }), 'span-name');
+      assert.strictEqual(key({}, 'constructor'), 'constructor');
+    });
+
+    it('caps the length', () => {
+      assert.strictEqual(key({}, 'x'.repeat(500)).length, MAX_OPERATION_KEY_LENGTH);
+      assert.strictEqual(key({ 'http.route': `/${'a'.repeat(500)}`, 'http.method': 'GET' }).length, MAX_OPERATION_KEY_LENGTH);
     });
   });
 });

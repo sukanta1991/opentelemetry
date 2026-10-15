@@ -85,6 +85,16 @@ export interface GenAiSummaryInput {
   limit: number;
 }
 
+export const BASELINE_SCOPES = ['all', 'services', 'calls', 'operations'] as const;
+
+export interface CompareBaselineInput {
+  baseline?: string;
+  against?: string;
+  session?: string;
+  scope: (typeof BASELINE_SCOPES)[number];
+  limit: number;
+}
+
 class InputError extends Error {}
 
 type Raw = Record<string, unknown>;
@@ -226,6 +236,16 @@ export function parseGetServiceMapInput(raw: unknown, maxItems: number): Parsed<
 export function parseGenAiSummaryInput(raw: unknown, maxItems: number): Parsed<GenAiSummaryInput> {
   return parse(raw, (r) => ({
     traceId: optString(r, 'traceId'),
+    limit: limit(r, maxItems),
+  }));
+}
+
+export function parseCompareBaselineInput(raw: unknown, maxItems: number): Parsed<CompareBaselineInput> {
+  return parse(raw, (r) => ({
+    baseline: optString(r, 'baseline'),
+    against: optString(r, 'against'),
+    session: optString(r, 'session'),
+    scope: optEnum(r, 'scope', BASELINE_SCOPES) ?? 'all',
     limit: limit(r, maxItems),
   }));
 }

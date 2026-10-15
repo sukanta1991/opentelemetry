@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { AnalysisContext, AnalysisOutput } from '../../src/ai/analysis/common';
+import { compareBaseline } from '../../src/ai/analysis/baseline';
 import { compareTraces } from '../../src/ai/analysis/compare';
 import { genAiSummary } from '../../src/ai/analysis/genai';
 import { queryLogs } from '../../src/ai/analysis/logs';
@@ -17,6 +18,8 @@ import { fitResult } from '../../src/ai/serialize';
 import * as inputs from '../../src/ai/toolInputs';
 import { KeyValueMap, LogRecord, Metric, Span } from '../../src/store/model';
 import { TelemetryStore } from '../../src/store/store';
+import { captureSnapshot } from '../../src/views/baseline';
+import { DEFAULT_BASELINE_SETTINGS } from '../../src/views/baselineCompare';
 import { quantile } from '../../src/views/webview/stats';
 import { T0 } from './aiFixtures';
 
@@ -103,7 +106,17 @@ describe('ai analysis performance (full buffers)', function () {
 
   before(() => {
     store = fill();
-    ctx = { now: T0 + TRACES * 10 + 1000, redactor: createRedactor(), maxItems: 25 };
+    const snapshot = captureSnapshot(store.getAllTaggedSpans(), { kind: 'session', label: 'perf', realm: 'other' });
+    ctx = {
+      now: T0 + TRACES * 10 + 1000,
+      redactor: createRedactor(),
+      maxItems: 25,
+      baselines: {
+        list: [{ id: 'b', name: 'main', createdMs: T0, sourceKind: 'session', sourceLabel: 'perf', saved: true, active: true }],
+        bodies: new Map([['b', snapshot]]),
+        settings: DEFAULT_BASELINE_SETTINGS,
+      },
+    };
     latest = allTraceIds(store, 1)[0];
   });
 
@@ -124,6 +137,7 @@ describe('ai analysis performance (full buffers)', function () {
     ['queryMetrics series', () => queryMetrics(store, value(inputs.parseQueryMetricsInput({ name: 'requests' }, 25)), ctx)],
     ['genAiSummary', () => genAiSummary(store, value(inputs.parseGenAiSummaryInput({}, 25)), ctx)],
     ['getServiceMap', () => getServiceMap(store, value(inputs.parseGetServiceMapInput({}, 25)), ctx)],
+    ['compareBaseline', () => compareBaseline(store, value(inputs.parseCompareBaselineInput({}, 25)), ctx)],
   ];
 
   for (const [name, fn] of cases) {

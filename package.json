@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "Apache-2.0",
@@ -228,6 +228,82 @@
         "command": "otel._openSource",
         "title": "Open Source Location",
         "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.menu",
+        "title": "Baselines…",
+        "category": "OpenTelemetry",
+        "icon": "$(history)"
+      },
+      {
+        "command": "otel.baseline.mark",
+        "title": "Mark Baseline Now",
+        "category": "OpenTelemetry",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "otel.baseline.captureWindow",
+        "title": "Capture Baseline From a Recent Window…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.captureAt",
+        "title": "Capture Baseline Up To a Time…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.fromSession",
+        "title": "Use a Loaded Session as Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.switch",
+        "title": "Switch Active Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.compare",
+        "title": "Compare Two Baselines…",
+        "category": "OpenTelemetry",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "otel.baseline.save",
+        "title": "Save Baseline",
+        "category": "OpenTelemetry",
+        "icon": "$(save)"
+      },
+      {
+        "command": "otel.baseline.rename",
+        "title": "Rename Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.delete",
+        "title": "Delete Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.export",
+        "title": "Export Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.import",
+        "title": "Import Baseline…",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.baseline.copyReport",
+        "title": "Copy Baseline Comparison Report",
+        "category": "OpenTelemetry",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "otel.baseline.deactivate",
+        "title": "Stop Comparing With Baseline",
+        "category": "OpenTelemetry",
+        "icon": "$(circle-slash)"
       }
     ],
     "menus": {
@@ -251,6 +327,38 @@
         {
           "command": "otel.removeSession",
           "when": "false"
+        },
+        {
+          "command": "otel.baseline.switch",
+          "when": "otel.hasBaselines"
+        },
+        {
+          "command": "otel.baseline.compare",
+          "when": "otel.hasBaselines"
+        },
+        {
+          "command": "otel.baseline.rename",
+          "when": "otel.hasBaselines"
+        },
+        {
+          "command": "otel.baseline.delete",
+          "when": "otel.hasBaselines"
+        },
+        {
+          "command": "otel.baseline.export",
+          "when": "otel.hasBaselines"
+        },
+        {
+          "command": "otel.baseline.save",
+          "when": "otel.baselineActive"
+        },
+        {
+          "command": "otel.baseline.copyReport",
+          "when": "otel.baselineActive"
+        },
+        {
+          "command": "otel.baseline.deactivate",
+          "when": "otel.baselineActive"
         }
       ],
       "webview/context": [
@@ -275,6 +383,11 @@
           "command": "otel.openServiceMap",
           "when": "view == otel.instances",
           "group": "navigation@2"
+        },
+        {
+          "command": "otel.baseline.menu",
+          "when": "view == otel.instances",
+          "group": "baseline@1"
         },
         {
           "command": "otel.clear",
@@ -514,6 +627,54 @@
           "maximum": 1,
           "scope": "resource",
           "markdownDescription": "Service map: error rate (0–1, e.g. `0.05` = 5%) at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
+        },
+        "otel.serviceMap.baseline.minSamples": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 1000,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: minimum calls on **both** sides before a service, call or operation is compared. Fewer calls show as “too few calls to compare”."
+        },
+        "otel.serviceMap.baseline.minLatencyChangePct": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 1000,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many percent **and** at least `#otel.serviceMap.baseline.minLatencyChangeMs#`."
+        },
+        "otel.serviceMap.baseline.minLatencyChangeMs": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 60000,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many milliseconds **and** at least `#otel.serviceMap.baseline.minLatencyChangePct#` percent."
+        },
+        "otel.serviceMap.baseline.minErrorRateChangePp": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: a statistically significant error-rate change counts only if it is at least this many percentage points (e.g. 1% → 3% is 2 points)."
+        },
+        "otel.serviceMap.baseline.minFanoutChange": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1000,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: change in calls per request on a call between services (e.g. an N+1 query going from 1 to 3 calls) that counts as a regression or improvement."
+        },
+        "otel.serviceMap.baseline.coverageWarnPct": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "resource",
+          "markdownDescription": "Service map baselines: warn when at least this percentage of the services and dependencies with calls now are missing from the baseline (it may come from a different setup). `0` turns the warning off."
         },
         "otel.ai.enabled": {
           "type": "boolean",
@@ -845,6 +1006,44 @@
               "minimum": 1,
               "maximum": 200,
               "description": "Maximum LLM and tool calls to list (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_compareBaseline",
+        "displayName": "Compare With OpenTelemetry Baseline",
+        "toolReferenceName": "otelBaseline",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Compare current traffic (or another baseline) with a captured baseline: what regressed, improved, appeared or disappeared.",
+        "modelDescription": "Compares the active (or named) baseline snapshot with live data after its cut-off, a loaded session, or another baseline. Returns only statistically significant changes that also pass the user's minimum-change thresholds, per service, per call between services/dependencies, and per operation: verdict (regressed, improved, new, removed), calls [baseline, now], p50Ms, p95Ms, errorRate and callsPerRequest as [baseline, now], and which metrics changed. Also returns verdict counts, coverage (share of current services missing from the baseline) and trace refs for regressions. If no calls arrived after the cut-off yet, returns waiting: true. Errors list known baseline or session names.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "baseline": {
+              "type": "string",
+              "description": "Baseline name (case-insensitive) or id. Omit for the active baseline."
+            },
+            "against": {
+              "type": "string",
+              "description": "What to compare with: 'current' (default, live data or the session) or another baseline's name to compare two baselines."
+            },
+            "session": {
+              "type": "string",
+              "description": "Compare with a loaded session file (its file name) instead of live data."
+            },
+            "scope": {
+              "type": "string",
+              "enum": ["all", "services", "calls", "operations"],
+              "description": "Which changes to list: all (default), services, calls between services/dependencies, or operations."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum changes to list, most significant first (default 25, capped by otel.ai.maxResultItems)."
             }
           }
         }

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Live service map: windowed call stats per node/edge and drill-down details. No vscode import.
 
-import { CodeLocation, Span } from '../store/model';
+import { CodeLocation, KeyValueMap, Span } from '../store/model';
+import type { KeyDelta, MapDelta } from './baselineCompare';
 import { MapNode, NodeType, classifySpanTarget, svcId } from './serviceGraph';
-import { quantile } from './webview/stats';
+import { quantileSorted } from './webview/stats';
 import { TIME_RANGE_SECONDS, TimeRangeKind, windowBounds } from './webview/timeRange';
 
 // Structurally the store's TaggedSpan; not imported so the webview bundle can import this module's types.
@@ -53,6 +54,11 @@ export interface NodeStats extends CallStats {
 export interface ModelNode extends MapNode {
   stats: NodeStats;
   health: Health;
+  // Baseline mode only.
+  cmp?: MapDelta;
+  opChanges?: { regressed: number; improved: number };
+  // Known only from the baseline: no calls in the current topology.
+  ghost?: true;
 }
 
 export interface ModelEdge {
@@ -60,12 +66,17 @@ export interface ModelEdge {
   target: string;
   stats: CallStats;
   health: Health;
+  cmp?: MapDelta;
+  opChanges?: { regressed: number; improved: number };
+  ghost?: true;
 }
 
 export interface ServiceMapModel {
   range: TimeRangeKind;
   anchorMs: number;
   fromMs: number;
+  // Baseline mode within the baseline's realm: only spans ending after this count.
+  cutoffMs?: number;
   effectiveWindowMs: number;
   partial: boolean;
   hiddenNodes: number;
@@ -78,6 +89,9 @@ export interface ServiceMapOptions {
   thresholds?: ServiceMapThresholds;
   buckets?: number;
   maxNodes?: number;
+  // Collect per-operation stats (baseline mode).
+  ops?: boolean;
+  cutoffMs?: number;
 }
 
 export type MapSelection = { kind: 'node'; id: string } | { kind: 'edge'; source: string; target: string };
@@ -95,6 +109,7 @@ export interface TraceRef {
 
 export interface OperationStats extends CallStats {
   name: string;
+  cmp?: KeyDelta;
 }
 
 export interface SourceRef {
@@ -111,6 +126,9 @@ export interface NodeDetails {
   slowTraces: TraceRef[];
   sources: SourceRef[];
   instanceIds: string[];
+  // Baseline mode: full deltas for the selected node or edge, and its example traces still in the store.
+  cmp?: KeyDelta;
+  baselineTraces?: string[];
 }
 
 export interface DetailCaps {
@@ -124,6 +142,35 @@ export const DEFAULT_DETAIL_CAPS: DetailCaps = { operations: 10, traces: 5, sour
 const TYPE_ORDER: Record<NodeType, number> = { service: 0, database: 1, queue: 2, external: 3 };
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+export const compareModelNodes = (a: MapNode, b: MapNode) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || cmp(a.id, b.id);
+export const compareModelEdges = (a: ModelEdge, b: ModelEdge) => cmp(a.source, b.source) || cmp(a.target, b.target);
+
+export const MAX_OPERATION_KEY_LENGTH = 200;
+
+function attrText(attrs: KeyValueMap, key: string): string | undefined {
+  const v = attrs[key];
+  return typeof v === 'string' ? v.trim() || undefined : undefined;
+}
+
+// Low-cardinality operation name: route or db operation before the span name, which may carry ids.
+export function operationKey(span: Span): string {
+  const a = span.attrs;
+  let key: string | undefined;
+  const route = attrText(a, 'http.route');
+  if (route) {
+    const method = attrText(a, 'http.request.method') ?? attrText(a, 'http.method');
+    key = method ? `${method} ${route}` : route;
+  } else {
+    const op = attrText(a, 'db.operation.name') ?? attrText(a, 'db.operation');
+    if (op) {
+      const collection = attrText(a, 'db.collection.name') ?? attrText(a, 'db.sql.table');
+      key = collection ? `${op} ${collection}` : op;
+    }
+  }
+  key ??= span.name;
+  return key.length > MAX_OPERATION_KEY_LENGTH ? key.slice(0, MAX_OPERATION_KEY_LENGTH) : key;
+}
 
 function threshold(v: unknown, fallback: number, max = Infinity): number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(v, max) : fallback;
@@ -159,7 +206,7 @@ export function classifyHealth(stats: CallStats, t: ServiceMapThresholds): Healt
   return level === 2 ? 'critical' : level === 1 ? 'warn' : 'ok';
 }
 
-interface Prepared {
+export interface Prepared {
   // traceId -> spanId -> span; span ids are only unique within a trace.
   index: Map<string, Map<string, TaggedSpan>>;
   serviceNodes: Map<string, MapNode>;
@@ -168,7 +215,7 @@ interface Prepared {
   oldestMs: number;
 }
 
-function prepare(tagged: readonly TaggedSpan[]): Prepared {
+export function prepare(tagged: readonly TaggedSpan[]): Prepared {
   const index = new Map<string, Map<string, TaggedSpan>>();
   const serviceNodes = new Map<string, MapNode>();
   let anchorMs = -Infinity;
@@ -223,42 +270,65 @@ interface Window {
   rateWindowMs?: number;
 }
 
-function windowFor(range: TimeRangeKind, anchorMs: number, oldestMs: number): Window {
-  const startMs = Math.max(windowBounds(anchorMs, range)[0], oldestMs);
+// A cut-off narrows the window on purpose, so it never marks the window partial.
+function windowFor(range: TimeRangeKind, anchorMs: number, oldestMs: number, cutoffMs = -Infinity): Window {
+  const rangeStartMs = Math.max(windowBounds(anchorMs, range)[0], oldestMs);
+  const startMs = Math.max(rangeStartMs, cutoffMs);
   const effectiveWindowMs = Math.max(0, anchorMs - startMs);
-  const windowed = range !== 'all';
+  const windowed = range !== 'all' || cutoffMs > -Infinity;
   return {
     startMs,
     effectiveWindowMs,
-    partial: windowed && effectiveWindowMs < TIME_RANGE_SECONDS[range] * 1000,
+    partial: range !== 'all' && anchorMs - rangeStartMs < TIME_RANGE_SECONDS[range] * 1000,
     rateWindowMs: windowed && effectiveWindowMs >= MIN_RATE_WINDOW_MS ? effectiveWindowMs : undefined,
   };
 }
 
-interface Acc {
+export interface CallAcc {
   count: number;
   errors: number;
   durations: number[];
   lastSeenMs: number;
+  slowestMs: number;
+  slowestTrace?: string;
+  lastErrorMs: number;
+  lastErrorTrace?: string;
 }
 
-const newAcc = (): Acc => ({ count: 0, errors: 0, durations: [], lastSeenMs: 0 });
+const newAcc = (): CallAcc => ({ count: 0, errors: 0, durations: [], lastSeenMs: 0, slowestMs: -Infinity, lastErrorMs: -Infinity });
 
-function record(acc: Acc, ms: number, error: boolean, endMs: number, inWindow: boolean): void {
+function record(acc: CallAcc, ms: number, error: boolean, t: TaggedSpan, inWindow: boolean): void {
+  const { endMs, traceId } = t.span;
   if (endMs > acc.lastSeenMs) acc.lastSeenMs = endMs;
   if (!inWindow) return;
   acc.count++;
-  if (error) acc.errors++;
-  acc.durations.push(ms);
+  if (error) {
+    acc.errors++;
+    if (endMs > acc.lastErrorMs) {
+      acc.lastErrorMs = endMs;
+      acc.lastErrorTrace = traceId;
+    }
+  }
+  if (Number.isFinite(ms)) {
+    acc.durations.push(ms);
+    if (ms > acc.slowestMs) {
+      acc.slowestMs = ms;
+      acc.slowestTrace = traceId;
+    }
+  }
 }
 
-function finish(acc: Acc, rateWindowMs: number | undefined): CallStats {
+// Typed-array sort is numeric and native; the comparator form costs ~15% of buildServiceMap.
+export const sortedDurations = (acc: CallAcc): Float64Array => Float64Array.from(acc.durations).sort();
+
+function finish(acc: CallAcc, rateWindowMs: number | undefined): CallStats {
+  const sorted = sortedDurations(acc);
   const stats: CallStats = {
     count: acc.count,
     errors: acc.errors,
     errorRate: acc.count ? acc.errors / acc.count : 0,
-    p50: quantile(acc.durations, 0.5),
-    p95: quantile(acc.durations, 0.95),
+    p50: quantileSorted(sorted, 0.5),
+    p95: quantileSorted(sorted, 0.95),
   };
   if (rateWindowMs !== undefined) stats.ratePerMin = acc.count / (rateWindowMs / 60_000);
   return stats;
@@ -268,93 +338,142 @@ function emptyModel(range: TimeRangeKind): ServiceMapModel {
   return { range, anchorMs: 0, fromMs: 0, effectiveWindowMs: 0, partial: false, hiddenNodes: 0, nodes: [], edges: [] };
 }
 
-export function buildServiceMap(tagged: readonly TaggedSpan[], opts: ServiceMapOptions): ServiceMapModel {
-  const { range } = opts;
-  if (!tagged.length) return emptyModel(range);
-  const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
-  const buckets = Math.max(1, Math.floor(opts.buckets ?? SPARK_BUCKETS));
-  const maxNodes = opts.maxNodes ?? MAX_NODES;
-  const p = prepare(tagged);
-  const w = windowFor(range, p.anchorMs, p.oldestMs);
-  const bucketMs = w.effectiveWindowMs / buckets;
+export interface ScopeAcc {
+  acc: CallAcc;
+  // Operation name -> stats; only filled when collecting operations.
+  ops: Map<string, CallAcc>;
+}
 
-  interface NodeAcc {
-    node: MapNode;
-    acc: Acc;
-    spark: { count: number[]; errors: number[] };
-  }
-  const nodes = new Map<string, NodeAcc>();
-  const nodeAcc = (node: MapNode): NodeAcc => {
+export interface CollectedNode extends ScopeAcc {
+  node: MapNode;
+  spark?: { count: number[]; errors: number[] };
+}
+
+export interface Collected {
+  nodes: Map<string, CollectedNode>;
+  // source -> target -> stats, avoiding a composite string key per call.
+  edges: Map<string, Map<string, ScopeAcc>>;
+}
+
+export interface CollectOptions {
+  inWindow: (endMs: number) => boolean;
+  ops?: boolean;
+  onNodeCall?: (node: CollectedNode, endMs: number, error: boolean) => void;
+}
+
+const scopeAcc = (): ScopeAcc => ({ acc: newAcc(), ops: new Map() });
+
+function opAcc(ops: Map<string, CallAcc>, name: string): CallAcc {
+  let acc = ops.get(name);
+  if (!acc) ops.set(name, (acc = newAcc()));
+  return acc;
+}
+
+// Every call shapes the topology and lastSeenMs; only calls inWindow are counted.
+export function collectCalls(tagged: readonly TaggedSpan[], p: Prepared, opts: CollectOptions): Collected {
+  const nodes = new Map<string, CollectedNode>();
+  const nodeAcc = (node: MapNode): CollectedNode => {
     let n = nodes.get(node.id);
-    if (!n) {
-      const spark = { count: new Array<number>(buckets).fill(0), errors: new Array<number>(buckets).fill(0) };
-      nodes.set(node.id, (n = { node, acc: newAcc(), spark }));
-    }
+    if (!n) nodes.set(node.id, (n = { node, ...scopeAcc() }));
     return n;
   };
   for (const node of p.serviceNodes.values()) nodeAcc(node);
-  // source -> target -> stats, avoiding a composite string key per call.
-  const edges = new Map<string, Map<string, Acc>>();
+  const edges = new Map<string, Map<string, ScopeAcc>>();
+  const { inWindow: isIn, ops: withOps, onNodeCall } = opts;
 
   visitCalls(tagged, p, (source, target, t, nodeMs, edgeMs) => {
-    const { endMs } = t.span;
-    const inWindow = endMs >= w.startMs;
+    const inWindow = isIn(t.span.endMs);
     const error = t.span.statusCode === 'ERROR';
     const n = nodeAcc(target);
-    record(n.acc, nodeMs, error, endMs, inWindow);
-    if (inWindow) {
-      const b = bucketMs > 0 ? Math.min(buckets - 1, Math.max(0, Math.floor((endMs - w.startMs) / bucketMs))) : buckets - 1;
-      n.spark.count[b]++;
-      if (error) n.spark.errors[b]++;
-    }
+    record(n.acc, nodeMs, error, t, inWindow);
+    const op = withOps && inWindow ? operationKey(t.span) : undefined;
+    if (op !== undefined) record(opAcc(n.ops, op), nodeMs, error, t, true);
+    if (inWindow && onNodeCall) onNodeCall(n, t.span.endMs, error);
     if (source === undefined) return;
     let bySource = edges.get(source);
     if (!bySource) edges.set(source, (bySource = new Map()));
     let e = bySource.get(target.id);
-    if (!e) bySource.set(target.id, (e = newAcc()));
-    record(e, edgeMs, error, endMs, inWindow);
+    if (!e) bySource.set(target.id, (e = scopeAcc()));
+    record(e.acc, edgeMs, error, t, inWindow);
+    if (op !== undefined) record(opAcc(e.ops, op), edgeMs, error, t, true);
   });
+  return { nodes, edges };
+}
 
-  let hiddenNodes = 0;
-  if (nodes.size > maxNodes) {
+export function buildServiceMap(tagged: readonly TaggedSpan[], opts: ServiceMapOptions): ServiceMapModel {
+  return buildServiceMapCollected(tagged, opts).model;
+}
+
+// Also returns the untrimmed collector result, so baseline mode compares in the same pass.
+export function buildServiceMapCollected(
+  tagged: readonly TaggedSpan[],
+  opts: ServiceMapOptions
+): { model: ServiceMapModel; collected: Collected } {
+  const { range } = opts;
+  if (!tagged.length) return { model: emptyModel(range), collected: { nodes: new Map(), edges: new Map() } };
+  const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
+  const buckets = Math.max(1, Math.floor(opts.buckets ?? SPARK_BUCKETS));
+  const maxNodes = opts.maxNodes ?? MAX_NODES;
+  const p = prepare(tagged);
+  const cutoffMs = opts.cutoffMs;
+  const w = windowFor(range, p.anchorMs, p.oldestMs, cutoffMs);
+  const bucketMs = w.effectiveWindowMs / buckets;
+
+  const newSpark = () => ({ count: new Array<number>(buckets).fill(0), errors: new Array<number>(buckets).fill(0) });
+  const collected = collectCalls(tagged, p, {
+    inWindow: cutoffMs === undefined ? (endMs) => endMs >= w.startMs : (endMs) => endMs >= w.startMs && endMs > cutoffMs,
+    ops: opts.ops,
+    onNodeCall: (n, endMs, error) => {
+      const b = bucketMs > 0 ? Math.min(buckets - 1, Math.max(0, Math.floor((endMs - w.startMs) / bucketMs))) : buckets - 1;
+      const spark = (n.spark ??= newSpark());
+      spark.count[b]++;
+      if (error) spark.errors[b]++;
+    },
+  });
+  const { nodes, edges } = collected;
+
+  const visible = new Set(nodes.keys());
+  if (visible.size > maxNodes) {
     const droppable = [...nodes.values()]
       .filter((n) => n.node.type !== 'service')
       .sort((a, b) => a.acc.count - b.acc.count || a.acc.lastSeenMs - b.acc.lastSeenMs || cmp(a.node.id, b.node.id));
     for (const n of droppable) {
-      if (nodes.size <= maxNodes) break;
-      nodes.delete(n.node.id);
-      hiddenNodes++;
+      if (visible.size <= maxNodes) break;
+      visible.delete(n.node.id);
     }
   }
 
   const outNodes: ModelNode[] = [...nodes.values()]
+    .filter((n) => visible.has(n.node.id))
     .map(({ node, acc, spark }) => {
-      const stats = { ...finish(acc, w.rateWindowMs), lastSeenMs: acc.lastSeenMs, spark };
+      const stats = { ...finish(acc, w.rateWindowMs), lastSeenMs: acc.lastSeenMs, spark: spark ?? newSpark() };
       return { ...node, stats, health: classifyHealth(stats, thresholds) };
     })
-    .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || cmp(a.id, b.id));
+    .sort(compareModelNodes);
 
   const outEdges: ModelEdge[] = [];
   for (const [source, byTarget] of edges) {
-    if (!nodes.has(source)) continue;
-    for (const [target, acc] of byTarget) {
-      if (!nodes.has(target)) continue;
+    if (!visible.has(source)) continue;
+    for (const [target, { acc }] of byTarget) {
+      if (!visible.has(target)) continue;
       const stats = finish(acc, w.rateWindowMs);
       outEdges.push({ source, target, stats, health: classifyHealth(stats, thresholds) });
     }
   }
-  outEdges.sort((a, b) => cmp(a.source, b.source) || cmp(a.target, b.target));
+  outEdges.sort(compareModelEdges);
 
-  return {
+  const model: ServiceMapModel = {
     range,
     anchorMs: p.anchorMs,
     fromMs: w.startMs,
     effectiveWindowMs: w.effectiveWindowMs,
     partial: w.partial,
-    hiddenNodes,
+    hiddenNodes: nodes.size - visible.size,
     nodes: outNodes,
     edges: outEdges,
   };
+  if (cutoffMs !== undefined) model.cutoffMs = cutoffMs;
+  return { model, collected };
 }
 
 interface Candidate {
@@ -409,13 +528,15 @@ export function buildNodeDetails(
   }
 
   const p = prepare(tagged);
-  const ops = new Map<string, Acc>();
+  const ops = new Map<string, CallAcc>();
   const candidates: Candidate[] = [];
   const sources = new Map<string, SourceRef>();
   const service = node?.type === 'service' ? node.label : undefined;
+  const cutoffMs = model.cutoffMs ?? -Infinity;
+  const inWindow = (endMs: number) => endMs >= model.fromMs && endMs > cutoffMs;
 
   visitCalls(tagged, p, (source, target, t, nodeMs, edgeMs, caller) => {
-    if (t.span.endMs < model.fromMs) return;
+    if (!inWindow(t.span.endMs)) return;
     let ms: number;
     if (selection.kind === 'node') {
       if (target.id !== selection.id) return;
@@ -425,9 +546,7 @@ export function buildNodeDetails(
       ms = edgeMs;
     }
     const error = t.span.statusCode === 'ERROR';
-    let op = ops.get(t.span.name);
-    if (!op) ops.set(t.span.name, (op = newAcc()));
-    record(op, ms, error, t.span.endMs, true);
+    record(opAcc(ops, operationKey(t.span)), ms, error, t, true);
     candidates.push({ t, ms, error });
     if (!service) addSource(sources, caller.span.codeLocation);
   });
@@ -437,7 +556,7 @@ export function buildNodeDetails(
     for (const t of tagged) {
       if (t.serviceName !== service) continue;
       instanceIds.add(t.instanceId);
-      if (t.span.endMs >= model.fromMs) addSource(sources, t.span.codeLocation);
+      if (inWindow(t.span.endMs)) addSource(sources, t.span.codeLocation);
     }
   }
 

@@ -73,6 +73,7 @@ const fakeVscode: any = {
     },
     createStatusBarItem: () => ({
       show() {},
+      hide() {},
       dispose() {},
       set text(v: string) {
         statusText = v;
@@ -133,6 +134,27 @@ const fakeVscode: any = {
   env: { clipboard: { writeText: () => Promise.resolve() } },
 };
 
+// Workspace state and storage locations as VS Code passes them in the extension context.
+function storage() {
+  const values = new Map<string, unknown>();
+  const reads: string[] = [];
+  return {
+    workspaceState: {
+      reads,
+      get: (key: string) => {
+        reads.push(key);
+        return values.get(key);
+      },
+      update: (key: string, value: unknown) => {
+        values.set(key, value);
+        return Promise.resolve();
+      },
+    },
+    storageUri: { fsPath: '/tmp/otel-activate/ws', path: '/tmp/otel-activate/ws' },
+    globalStorageUri: { fsPath: '/tmp/otel-activate/global', path: '/tmp/otel-activate/global' },
+  };
+}
+
 // Intercept require('vscode').
 const origLoad = (Module as any)._load;
 (Module as any)._load = function (request: string, ...rest: any[]) {
@@ -145,7 +167,7 @@ async function main() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ext = require(path.join(extPath, 'dist', 'extension.js'));
 
-  const context = { extensionPath: extPath, subscriptions: [] as any[] };
+  const context = { extensionPath: extPath, subscriptions: [] as any[], ...storage() };
   await ext.activate(context);
 
   // Commands registered
@@ -176,6 +198,14 @@ async function main() {
     assert.ok(registeredCommands.has(cmd), `command registered: ${cmd}`);
   }
 
+  // Every contributed baseline command has a handler.
+  const pkgCommands: string[] = JSON.parse(fs.readFileSync(path.join(extPath, 'package.json'), 'utf8')).contributes.commands.map(
+    (c: any) => c.command
+  );
+  const baselineCommands = pkgCommands.filter((c) => c.startsWith('otel.baseline.'));
+  assert.strictEqual(baselineCommands.length, 14);
+  for (const cmd of baselineCommands) assert.ok(registeredCommands.has(cmd), `command registered: ${cmd}`);
+
   // AI tools and participant
   const pkg = JSON.parse(fs.readFileSync(path.join(extPath, 'package.json'), 'utf8'));
   assert.deepStrictEqual(
@@ -183,7 +213,7 @@ async function main() {
     pkg.contributes.languageModelTools.map((t: any) => t.name),
     'all contributed tools registered'
   );
-  assert.strictEqual(registeredTools.length, 9);
+  assert.strictEqual(registeredTools.length, 10);
   assert.deepStrictEqual(participants, ['otel.chat'], 'chat participant registered');
   assert.deepStrictEqual(outputChannels, ['OpenTelemetry AI'], 'AI output channel created once');
   // Invalid _openSource arguments are ignored without opening anything.
@@ -199,6 +229,13 @@ async function main() {
   );
   assert.ok(runningSet, 'receiver started and set otel.running context');
 
+  // No baseline is active, and activation touched no baseline files (the fs fake only has stat).
+  assert.ok(
+    executeLog.some((a) => a[0] === 'setContext' && a[1] === 'otel.baselineActive' && a[2] === false),
+    'otel.baselineActive context set'
+  );
+  assert.ok(context.workspaceState.reads.every((k: string) => k.startsWith('otel.baselines.')), 'only baseline index read');
+
   // subscriptions collected
   assert.ok(context.subscriptions.length > 5, 'disposables registered');
 
@@ -210,7 +247,7 @@ async function main() {
   registeredCommands.clear();
   registeredTools.length = 0;
   participants.length = 0;
-  const plain = { extensionPath: extPath, subscriptions: [] as any[] };
+  const plain = { extensionPath: extPath, subscriptions: [] as any[], ...storage() };
   await ext.activate(plain);
   for (const cmd of ['otel.start', 'otel.openTraces', 'otel._revealTrace', 'otel._openSource']) {
     assert.ok(registeredCommands.has(cmd), `command registered without AI APIs: ${cmd}`);

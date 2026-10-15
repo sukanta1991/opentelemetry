@@ -69,6 +69,7 @@ observability backend. You can also send data to both at once (see [Apps running
 - Services, databases, queues, and external dependencies inferred from spans, laid out top-down from callers to callees.
 - Live health per service and call: p95 latency, error rate, req/min, and a sparkline, coloured by configurable thresholds.
 - Click a service to open its traces, logs, metrics, slowest and failing traces, and source files.
+- **Baselines:** capture a "before" snapshot, change your code, and see which services, calls and operations regressed, improved, appeared or disappeared, with statistical tests so noise isn't flagged.
 
 ### OTLP receiver
 
@@ -81,7 +82,7 @@ observability backend. You can also send data to both at once (see [Apps running
 ### AI investigation (optional, off by default)
 
 - The `@otel` chat participant with `/slow`, `/errors`, and `/agent`.
-- Nine read-only `otel_*` tools for Copilot agent mode.
+- Ten read-only `otel_*` tools for Copilot agent mode.
 - Answers cite trace and span IDs, with buttons back to the data.
 
 See [Features in depth](#features-in-depth) for the full list.
@@ -99,6 +100,10 @@ See [Features in depth](#features-in-depth) for the full list.
 **Service map:** a live dependency map with p95 latency, error rate, and req/min per service and call. Click a node for its traces, logs, metrics, and source files:
 
 ![Service map with health colours, request rates, and the details panel](images/screenshots/service-map.png)
+
+**Service map baselines:** mark a baseline, change your code, and the map shows what changed: regressed calls in red, improvements in blue, new and removed dependencies, and before → after numbers per service, call and operation:
+
+![Service map compared with a baseline, showing a regressed checkout service and its database call](images/screenshots/service-map-baseline.png)
 
 **Metrics:** the **Graph** view renders each metric as a chart, with per-graph dropdowns for the chart type, the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
 
@@ -172,6 +177,16 @@ Going the other way works too: select a log and click **View Trace** (or click i
 1. Generate distributed traffic (HTTP calls, database queries, queue messages).
 2. Open the **Service Map** to see services, databases, and queues and how they connect.
 
+**Check whether a change made things faster or slower**
+
+1. Run your app and generate representative traffic (a load script, tests, or clicking through).
+2. Open the **Service Map**, click **Baseline…**, and choose **Mark now** (or **Capture current window**). The map switches to **vs Baseline**.
+3. Change the code, restart the app, and generate the same traffic again.
+4. The map colours each service, call and operation by its verdict, and the status bar shows how many regressed and improved. Click a node or call for before → after p50, p95, error rate and calls per request.
+5. Click **Save active baseline** to keep it across reloads (for example, name it `main @ 3f2c1a`), and **Copy comparison report** to paste a Markdown table into a pull request.
+
+To compare against a run you saved earlier, load the session file and choose **Use a loaded session…** from the same menu.
+
 ## Privacy and data handling
 
 The extension is built for local development. It has no backend and makes no outbound network calls of its own. Its only network activity is the OTLP receiver listening for your apps.
@@ -185,6 +200,7 @@ your app ── OTLP ──▶ 127.0.0.1:4317 (gRPC) / 127.0.0.1:4318 (HTTP) ─
 - The receiver binds to `127.0.0.1` by default. Setting `otel.host` to another address exposes your telemetry to that network.
 - Live telemetry is held in memory only. It is capped by the `otel.retention.*` settings and dropped when the receiver restarts or you run **Clear Collected Data**.
 - Telemetry is never written to disk unless you export it yourself.
+- **Saved baselines** are written to the extension's local storage for the workspace (global storage when no folder is open) on this machine. They hold aggregates only: service, dependency, route and operation names, call counts, error counts, sampled latencies, and up to 2 example trace IDs per item, but no attributes, log bodies or span payloads. Unsaved baselines stay in memory. **Export Baseline…** warns that the file contains names and trace IDs before writing it.
 
 **AI features (optional)**
 
@@ -205,7 +221,7 @@ the chat model you selected in VS Code ──▶ answer shown in chat
 
 | The `otel_*` tools can | The `otel_*` tools cannot |
 | --- | --- |
-| Read the telemetry the receiver holds in memory | Read, create or edit workspace files |
+| Read the telemetry the receiver holds in memory, and your service map baselines | Read, create or edit workspace files |
 | Read the `otel.ai.*` settings | Run commands, tasks or terminals |
 | | Read environment variables |
 | | Make network requests |
@@ -262,6 +278,7 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
 | `@otel /slow` | Finds the slowest recent request and explains where the time went. |
 | `@otel /errors` | Groups recent failing requests by endpoint and explains the top failure. |
 | `@otel /agent` | Summarizes the latest AI-agent run: LLM vs. tool time, token usage, slowest and failed tools. |
+| `@otel what regressed since my baseline?` | Compares current traffic with the active service map baseline and explains the biggest regressions, with example traces. |
 
 **In agent mode**, or with any chat participant, reference the tools directly with `#`, e.g. *"#otelTraces show failing checkout requests from the last 10 minutes"*.
 
@@ -276,6 +293,7 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
 | `otel_queryMetrics` | `#otelMetrics` | Metric list, or per-series last/min/max/avg/p50/p95 and counter rates |
 | `otel_getServiceMap` | `#otelServiceMap` | Service dependencies with call counts and error rates |
 | `otel_genAiSummary` | `#otelAgent` | An AI-agent trace (OpenTelemetry `gen_ai.*` conventions): time split, tokens per model, slowest and failed calls |
+| `otel_compareBaseline` | `#otelBaseline` | Current traffic (or another baseline) compared with a service map baseline: what regressed, improved, appeared or disappeared, by service, call or operation |
 
 **Privacy.** The tools are read-only, each call is confirmed, and results are redacted before they reach the model you selected. See [Privacy and data handling](#privacy-and-data-handling) for exactly what is sent.
 
@@ -318,8 +336,15 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
   - **Health:** each service, dependency, and call is **Healthy ●**, **Warning ▲**, **Critical ✖**, or **Idle ○** (no calls in the window), from the worse of its error rate and p95 latency against the `otel.serviceMap.*` thresholds. Fewer than 5 calls show at most a warning. Service latency is measured on the spans that enter the service; call latency is what the caller saw.
   - **Details:** click (or Tab + Enter) a node or edge for its stats, callers and callees, top operations, recent errors, slowest traces, and source files (`code.*` attributes). Services also get **Traces / Logs / Metrics** buttons (a picker appears when there are several instances). Esc closes the panel.
   - Rates and latencies come from the spans still in memory, so they are bounded by `otel.retention.maxTracesPerInstance`. Maps with more than 250 nodes hide the least-called dependencies.
+  - **Operations** in the details panel are grouped by route and method for HTTP (`GET /users/{id}`), by operation and table for databases (`SELECT users`), and by span name otherwise.
+- **Service map baselines** — compare the map with an earlier snapshot:
+  - **Capture** from the **Baseline…** button on the map, **Baselines…** in the Instances view's **…** menu, or the `OpenTelemetry: … Baseline` commands: **Mark now** (everything so far; later calls are compared), **Capture current window**, **Capture from a recent window…**, **Capture up to a time…** (or click a bar in a service's **Activity** chart), or **Use a loaded session…**. A baseline is a frozen copy of the numbers: clearing data or evicting old spans doesn't change it.
+  - **vs Baseline** colours the map by verdict instead of health: **Regressed ⬆**, **Improved ⬇**, **No significant change ●**, **New ✚**, **Not seen since baseline ⊖** (drawn dashed), or **Too few calls to compare ?**. Node and call labels show the p95 change; the details panel shows before → after calls, p50, p95, error rate and calls per request, and an Operations table with Δ p95.
+  - **Noise-aware:** p50 uses a Mann-Whitney test, p95 a tail test, and error rate a two-proportion (or Fisher's exact) test, corrected for the number of comparisons (Benjamini-Hochberg). A change also has to clear the `otel.serviceMap.baseline.*` minimums (by default ≥ 20% and ≥ 5 ms, ≥ 2 percentage points of errors, ≥ 1 extra call per request). Items with fewer than 20 calls on either side aren't judged.
+  - In the same session, only calls that finished after the baseline was taken count as "current", so nothing is counted twice. A **⚠ n% not in baseline** badge warns when much of the current map is missing from the baseline (`coverageWarnPct`).
+  - **Manage** from the same menu: switch the active baseline, save (up to 50 saved; up to 5 unsaved are kept in memory), rename, delete, export to and import from a `.json` file, or **Compare two baselines** in a read-only map. **Copy comparison report** puts a Markdown table on the clipboard. The status bar shows the active baseline with its regressed and improved counts.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
-- **Ask Copilot** (opt-in) — the `@otel` chat participant and nine `otel_*` tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
+- **Ask Copilot** (opt-in) — the `@otel` chat participant and ten `otel_*` tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
 
 ## Trace query syntax
 
@@ -360,6 +385,18 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | `OpenTelemetry: Save Instance…` | Save one instance's traces, logs and metrics. |
 | `OpenTelemetry: Open Service Map` | Show the live service dependency map. |
 | `OpenTelemetry: Find Trace by ID` | Open a trace's waterfall from a trace ID or W3C `traceparent`. |
+| `OpenTelemetry: Baselines…` | All baseline actions in one menu (also in the Instances view's **…** menu and the map's **Baseline…** button). |
+| `OpenTelemetry: Mark Baseline Now` | Capture everything collected so far; calls after this point are compared with it. |
+| `OpenTelemetry: Capture Baseline From a Recent Window…` | Capture the last 1 min … 2 hours, or all retained data. |
+| `OpenTelemetry: Capture Baseline Up To a Time…` | Capture everything up to a time you pick or type (`HH:MM:SS`). |
+| `OpenTelemetry: Use a Loaded Session as Baseline…` | Use a loaded session file as the baseline for live data. |
+| `OpenTelemetry: Switch Active Baseline…` | Choose which baseline the map compares with. |
+| `OpenTelemetry: Compare Two Baselines…` | Open a read-only map of one baseline against another. |
+| `OpenTelemetry: Save Baseline` | Keep the active baseline across reloads. |
+| `OpenTelemetry: Rename Baseline…` / `Delete Baseline…` | Manage baselines. |
+| `OpenTelemetry: Export Baseline…` / `Import Baseline…` | Write a baseline to a `.json` file, or load one (validated, up to 8 MB). |
+| `OpenTelemetry: Copy Baseline Comparison Report` | Copy the comparison as a Markdown table. |
+| `OpenTelemetry: Stop Comparing With Baseline` | Turn off the active baseline. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action. Right-click a trace in the Traces panel for **Export Trace…**.
 
@@ -383,6 +420,12 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.serviceMap.latencyCriticalMs` | `1000` | Service map: p95 latency (ms) at or above which a node or call is critical. |
 | `otel.serviceMap.errorRateWarn` | `0.01` | Service map: error rate (0–1) at or above which a node or call shows a warning. |
 | `otel.serviceMap.errorRateCritical` | `0.05` | Service map: error rate (0–1) at or above which a node or call is critical. |
+| `otel.serviceMap.baseline.minSamples` | `20` | Baselines: minimum calls on both sides before a service, call or operation is compared (5–1000). |
+| `otel.serviceMap.baseline.minLatencyChangePct` | `20` | Baselines: a significant p50 or p95 change counts only if it is at least this many percent (and `minLatencyChangeMs`). |
+| `otel.serviceMap.baseline.minLatencyChangeMs` | `5` | Baselines: a significant p50 or p95 change counts only if it is at least this many milliseconds (and `minLatencyChangePct`). |
+| `otel.serviceMap.baseline.minErrorRateChangePp` | `2` | Baselines: a significant error-rate change counts only if it is at least this many percentage points. |
+| `otel.serviceMap.baseline.minFanoutChange` | `1` | Baselines: change in calls per request on a call (e.g. an N+1 query) that counts as a regression or improvement. |
+| `otel.serviceMap.baseline.coverageWarnPct` | `30` | Baselines: warn when at least this percentage of the current services and dependencies are missing from the baseline. `0` turns it off. |
 | `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
 | `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
 | `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
@@ -429,6 +472,13 @@ Paths are resolved inside your workspace folders; when only a file name matches,
 ### My collected data disappeared
 
 Live telemetry is stored **in memory** and is cleared when the receiver restarts or when you run **Clear Collected Data**. To keep a copy, click **Save Session…** and load the file again later with **Load Session…**. Loaded data survives **Clear Collected Data** and is removed only when you remove it.
+
+### The baseline comparison says "Waiting for calls" or "Too few calls to compare"
+
+- **Waiting for calls after …**: in the same session, only calls that finish after the baseline was taken are compared. Generate traffic after marking the baseline.
+- **Too few calls to compare ?**: each side needs at least `otel.serviceMap.baseline.minSamples` calls (default 20) for that service, call or operation. Send more traffic, pick a longer time window, or lower the setting.
+- In **vs Baseline** mode the time window starts at the later of the window start and the baseline cut-off, so a short window can hold fewer calls than in normal mode.
+- **⚠ n% not in baseline**: much of what is running now wasn't in the baseline, so it was probably captured from a different setup. Capture a new baseline, or set `otel.serviceMap.baseline.coverageWarnPct` to `0` to hide the badge.
 
 ### The settings gear opens an empty page
 

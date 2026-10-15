@@ -6,6 +6,9 @@ import { REDACTED } from '../../src/ai/redact';
 import { TOOL_NAMES } from '../../src/ai/toolNames';
 import { DISABLED_MESSAGE, ToolDeps, ToolInputError, describeInvocation, escapeMarkdown, runTool } from '../../src/ai/toolRunner';
 import { TelemetryStore } from '../../src/store/store';
+import { BaselineLookup } from '../../src/ai/analysis/baseline';
+import { captureSnapshot } from '../../src/views/baseline';
+import { DEFAULT_BASELINE_SETTINGS } from '../../src/views/baselineCompare';
 import {
   AGENT_CONTENT,
   DIST_TRACE,
@@ -37,11 +40,18 @@ function build(): TelemetryStore {
 
 describe('ai toolRunner', () => {
   const store = build();
+  const snapshot = captureSnapshot(store.getAllTaggedSpans(), { kind: 'session', label: 'before', realm: 'other' });
+  const baselines: BaselineLookup = {
+    list: [{ id: 'b1', name: 'main', createdMs: T0, sourceKind: 'session', sourceLabel: 'before', saved: true, active: true }],
+    bodies: new Map([['b1', snapshot]]),
+    settings: DEFAULT_BASELINE_SETTINGS,
+  };
   const deps = (over: Partial<ToolDeps> = {}): ToolDeps => ({
     store,
     settings: enabled,
     receiverRunning: true,
     now: T0 + 120_000,
+    baselines,
     ...over,
   });
 

@@ -1,28 +1,46 @@
 // SPDX-License-Identifier: Apache-2.0
 // Service map view helpers: formatting, geometry, persisted state and message types. Pure: no vscode or DOM.
 
+import type { DeltaMetric, MapDelta, MetricDelta, Verdict } from '../baselineCompare';
+import type { BaselineInfo, ColorMode } from '../baselineMap';
 import type { CallStats, Health, MapSelection, ModelNode, NodeDetails, ServiceMapModel } from '../serviceMapModel';
 import type { NodeBox } from './serviceMapLayout';
 import { DEFAULT_TIME_RANGE, TimeRangeKind, isTimeRangeKind } from './timeRange';
 
 // Host -> webview. `seq` changes with every posted update; index-based actions echo it back.
 export type HostMessage =
-  | { type: 'update'; seq: number; model: ServiceMapModel; details: NodeDetails | null }
+  | {
+      type: 'update';
+      seq: number;
+      model: ServiceMapModel;
+      details: NodeDetails | null;
+      colorMode: ColorMode;
+      baseline: BaselineInfo | null;
+      // A baseline is active, so the colour-mode toggle applies even while `baseline` is null.
+      hasBaseline: boolean;
+      // Baseline-vs-baseline map: no spans behind it, so no range, drill-down or capture.
+      readOnly: boolean;
+    }
   | { type: 'gone' }
   | { type: 'error'; message: string }
   | { type: 'timeZone'; useLocalTime: boolean };
 
 export type OpenTarget = 'traces' | 'logs' | 'metrics';
-export type TraceList = 'error' | 'slow';
+export type TraceList = 'error' | 'slow' | 'baseline';
 
-// Webview -> host. Trace and source actions are indexes into the details of update `seq`.
+// Webview -> host. Trace, source and bucket actions are indexes into what update `seq` carried.
 export type ViewMessage =
-  | { type: 'ready'; range: TimeRangeKind; selection: MapSelection | null }
+  | { type: 'ready'; range: TimeRangeKind; selection: MapSelection | null; colorMode?: ColorMode }
   | { type: 'setRange'; range: TimeRangeKind }
   | { type: 'select'; selection: MapSelection | null }
+  | { type: 'setColorMode'; colorMode: ColorMode }
+  | { type: 'baselineMenu' }
+  | { type: 'captureAtBucket'; seq: number; index: number }
   | { type: 'open'; target: OpenTarget }
   | { type: 'revealTrace'; seq: number; list: TraceList; index: number }
   | { type: 'openSource'; seq: number; index: number };
+
+export const isColorMode = (v: unknown): v is ColorMode => v === 'absolute' || v === 'baseline';
 
 export const HEALTH_GLYPH: Record<Health, string> = { ok: '●', warn: '▲', critical: '✖', idle: '○' };
 export const HEALTH_LABEL: Record<Health, string> = { ok: 'Healthy', warn: 'Warning', critical: 'Critical', idle: 'Idle' };
@@ -75,6 +93,135 @@ export function nodeAriaLabel(node: ModelNode): string {
   const parts = [node.label, node.type, HEALTH_LABEL[node.health], formatCalls(s.count)];
   if (s.count) parts.push(`p95 ${formatMs(s.p95)}`, `${formatPercent(s.errorRate)} errors`);
   return parts.join(', ');
+}
+
+// Glyphs differ from the health ones so the two modes are never confused.
+export const VERDICT_GLYPH: Record<Verdict, string> = {
+  regressed: '⬆',
+  improved: '⬇',
+  unchanged: '●',
+  insufficient: '?',
+  new: '✚',
+  removed: '⊖',
+  untracked: '◌',
+};
+
+export const VERDICT_LABEL: Record<Verdict, string> = {
+  regressed: 'Regressed',
+  improved: 'Improved',
+  unchanged: 'No significant change',
+  insufficient: 'Too few calls to compare',
+  new: 'New since baseline',
+  removed: 'Not seen since baseline',
+  untracked: 'Not tracked by the baseline',
+};
+
+const SHORT: Partial<Record<Verdict, string>> = { new: 'new', removed: 'not seen', insufficient: 'n too small', untracked: 'untracked' };
+const METRIC_MARK: Partial<Record<DeltaMetric, string>> = { errorRate: 'errors', fanout: 'calls/req' };
+
+// "+42%" / "−12%"; empty when there is no meaningful base.
+export function signedPercent(base: number | null, current: number | null): string {
+  if (base === null || current === null || base <= 0) return '';
+  const pct = ((current - base) / base) * 100;
+  const r = Math.abs(pct) < 10 ? Math.round(pct * 10) / 10 : Math.round(pct);
+  if (r === 0) return '±0%';
+  return `${r > 0 ? '+' : '−'}${Math.abs(r)}%`;
+}
+
+// Map label for a node or edge in baseline mode, e.g. "p95 120 ms (+42%) · errors".
+export function deltaLabel(d: MapDelta): string {
+  const short = SHORT[d.verdict];
+  if (short) return short;
+  const [base, current] = d.p95;
+  const pct = signedPercent(base, current);
+  const marks = (d.changed ?? []).map((m) => METRIC_MARK[m]).filter((m): m is string => !!m);
+  return [`p95 ${formatMs(current)}${pct ? ` (${pct})` : ''}`, ...marks].join(' · ');
+}
+
+export function opChangesText(c: { regressed: number; improved: number } | undefined): string {
+  if (!c) return '';
+  const parts: string[] = [];
+  if (c.regressed) parts.push(`${c.regressed} op${c.regressed === 1 ? '' : 's'} ${VERDICT_GLYPH.regressed}`);
+  if (c.improved) parts.push(`${c.improved} op${c.improved === 1 ? '' : 's'} ${VERDICT_GLYPH.improved}`);
+  return parts.join(' ');
+}
+
+// Nodes are sized for their name, so the subtitle stays short: "936 ms +297% · err · 1⬆".
+export function nodeDeltaSubtitle(node: ModelNode): string {
+  const d = node.cmp;
+  if (!d) return nodeSubtitle(node.stats);
+  const parts = [SHORT[d.verdict] ?? `${formatMs(d.p95[1])} ${signedPercent(d.p95[0], d.p95[1])}`.trim()];
+  if (!SHORT[d.verdict]) {
+    if (d.changed?.includes('errorRate')) parts.push('err');
+    if (d.changed?.includes('fanout')) parts.push('calls');
+  }
+  const c = node.opChanges;
+  if (c?.regressed) parts.push(`${c.regressed}${VERDICT_GLYPH.regressed}`);
+  if (c?.improved) parts.push(`${c.improved}${VERDICT_GLYPH.improved}`);
+  return parts.join(' · ');
+}
+
+export function deltaAriaLabel(name: string, kind: string, d: MapDelta, opChanges?: { regressed: number; improved: number }): string {
+  const [base, current] = d.p95;
+  const parts = [name, kind, VERDICT_LABEL[d.verdict], `p95 ${formatMs(base)} before, ${formatMs(current)} now`];
+  for (const m of d.changed ?? []) if (METRIC_MARK[m]) parts.push(`${METRIC_MARK[m]} changed`);
+  const ops = opChanges && (opChanges.regressed || opChanges.improved);
+  if (ops) parts.push(`${opChanges!.regressed} operations regressed, ${opChanges!.improved} improved`);
+  return parts.join(', ');
+}
+
+// Sidebar row: "12 ms → 18 ms (+50%)"; error rates move in percentage points.
+export function metricDeltaText(m: MetricDelta, kind: 'ms' | 'rate' | 'ratio'): string {
+  if (kind === 'rate') {
+    const fmt = (v: number | null) => (v === null ? '–' : formatPercent(v));
+    const pp = m.delta === null ? '' : ` (${m.delta >= 0 ? '+' : '−'}${trim1(Math.abs(m.delta * 100))} pp)`;
+    return `${fmt(m.base)} → ${fmt(m.current)}${pp}`;
+  }
+  const fmt = kind === 'ms' ? formatMs : (v: number | null) => (v === null ? '–' : trim1(v));
+  const pct = signedPercent(m.base, m.current);
+  return `${fmt(m.base)} → ${fmt(m.current)}${pct ? ` (${pct})` : ''}`;
+}
+
+// Capturing "up to" a sparkline bucket includes the whole bucket.
+export function bucketEndMs(model: ServiceMapModel, index: number): number {
+  const buckets = model.nodes[0]?.stats.spark.count.length || 1;
+  return model.fromMs + ((index + 1) * model.effectiveWindowMs) / buckets;
+}
+
+const SOURCE_TEXT: Record<BaselineInfo['sourceKind'], string> = {
+  window: 'map window',
+  mark: 'mark',
+  time: 'time cut-off',
+  session: 'session',
+  file: 'file',
+};
+
+// Toolbar badge for the active comparison; `time` formats a clock time in the user's zone.
+export function baselineBadge(b: BaselineInfo, time: (ms: number) => string): { text: string; title: string } {
+  const lines = [`Baseline “${b.name}”: ${SOURCE_TEXT[b.sourceKind]}${b.sourceLabel ? ` (${b.sourceLabel})` : ''}, captured ${time(b.createdMs)}.`];
+  if (b.cutoffMs !== undefined) lines.push(`Comparing calls that ended after ${time(b.cutoffMs)}.`);
+  if (b.truncated) lines.push('The baseline hit its size limit, so some quiet calls were left out and show as “not tracked”.');
+  let text: string;
+  if (b.against) text = `“${b.name}” → “${b.against}”`;
+  else if (b.waiting) text = `vs “${b.name}” · waiting${b.cutoffMs !== undefined ? ` for calls after ${time(b.cutoffMs)}` : ''}`;
+  else text = `vs “${b.name}”${b.cutoffMs !== undefined ? ` · since ${time(b.cutoffMs)}` : ''}`;
+  if (b.summary && (b.summary.regressed || b.summary.improved)) {
+    text += ` · ${VERDICT_GLYPH.regressed}${b.summary.regressed} ${VERDICT_GLYPH.improved}${b.summary.improved}`;
+    lines.push(`${b.summary.regressed} services or calls regressed, ${b.summary.improved} improved.`);
+  }
+  return { text, title: lines.join(' ') };
+}
+
+export function coverageNote(b: BaselineInfo): { text: string; title: string } | undefined {
+  const c = b.coverage;
+  if (!c?.warn) return undefined;
+  const pct = Math.round(c.ratio * 100);
+  return {
+    text: `⚠ ${pct}% not in baseline`,
+    title:
+      `${c.missingFromBase} of ${c.currentNodes} services and dependencies with calls now are missing from the baseline, ` +
+      'so it may be from a different setup. Capture a new one if the comparison looks off (threshold: otel.serviceMap.baseline.coverageWarnPct).',
+  };
 }
 
 export function truncateLabel(label: string, maxChars: number): string {
@@ -164,6 +311,8 @@ export interface MapViewState {
   range: TimeRangeKind;
   selection: MapSelection | null;
   view: ViewTransform | null;
+  // Only once the user picked one; the host chooses otherwise.
+  colorMode?: ColorMode;
 }
 
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
@@ -182,11 +331,13 @@ export function loadMapState(raw: unknown): MapViewState {
   const v = r.view && typeof r.view === 'object' ? (r.view as Record<string, unknown>) : undefined;
   const view =
     v && isNum(v.scale) && isNum(v.tx) && isNum(v.ty) ? { scale: clampScale(v.scale), tx: v.tx, ty: v.ty } : null;
-  return {
+  const out: MapViewState = {
     range: isTimeRangeKind(r.range) ? r.range : DEFAULT_TIME_RANGE,
     selection: parseSelection(r.selection),
     view,
   };
+  if (isColorMode(r.colorMode)) out.colorMode = r.colorMode;
+  return out;
 }
 
 export function sameSelection(a: MapSelection | null, b: MapSelection | null): boolean {
@@ -206,6 +357,7 @@ export interface HostContext {
   model: ServiceMapModel | null;
   details: NodeDetails | null;
   selection: MapSelection | null;
+  readOnly?: boolean;
 }
 
 const OPEN_TARGETS: readonly OpenTarget[] = ['traces', 'logs', 'metrics'];
@@ -224,34 +376,51 @@ function index(v: unknown, length: number): number | undefined {
 export function parseMapMessage(m: unknown, ctx: HostContext): ViewMessage | undefined {
   if (!m || typeof m !== 'object') return undefined;
   const msg = m as Record<string, unknown>;
+  const live = !ctx.readOnly;
   switch (msg.type) {
-    case 'ready':
-      return {
+    case 'ready': {
+      const ready: ViewMessage = {
         type: 'ready',
         range: isTimeRangeKind(msg.range) ? msg.range : DEFAULT_TIME_RANGE,
         selection: parseSelection(msg.selection),
       };
+      if (isColorMode(msg.colorMode)) ready.colorMode = msg.colorMode;
+      return ready;
+    }
     case 'setRange':
-      return isTimeRangeKind(msg.range) ? { type: 'setRange', range: msg.range } : undefined;
+      return live && isTimeRangeKind(msg.range) ? { type: 'setRange', range: msg.range } : undefined;
     case 'select': {
       if (msg.selection === null) return { type: 'select', selection: null };
       const selection = parseSelection(msg.selection);
       return selection && inModel(ctx.model, selection) ? { type: 'select', selection } : undefined;
     }
+    case 'setColorMode':
+      return isColorMode(msg.colorMode) ? { type: 'setColorMode', colorMode: msg.colorMode } : undefined;
+    case 'baselineMenu':
+      return { type: 'baselineMenu' };
+    case 'captureAtBucket': {
+      if (!live || msg.seq !== ctx.seq || !ctx.model) return undefined;
+      const i = index(msg.index, ctx.model.nodes[0]?.stats.spark.count.length ?? 0);
+      return i === undefined ? undefined : { type: 'captureAtBucket', seq: ctx.seq, index: i };
+    }
     case 'open': {
       const sel = ctx.selection;
       const node = sel?.kind === 'node' ? ctx.model?.nodes.find((n) => n.id === sel.id) : undefined;
       const target = OPEN_TARGETS.find((t) => t === msg.target);
-      return target && node?.type === 'service' ? { type: 'open', target } : undefined;
+      return live && target && node?.type === 'service' && !node.ghost ? { type: 'open', target } : undefined;
     }
     case 'revealTrace': {
-      if (msg.seq !== ctx.seq || !ctx.details || (msg.list !== 'error' && msg.list !== 'slow')) return undefined;
-      const list = msg.list === 'error' ? ctx.details.errorTraces : ctx.details.slowTraces;
-      const i = index(msg.index, list.length);
+      if (msg.seq !== ctx.seq || !ctx.details) return undefined;
+      let length: number;
+      if (msg.list === 'baseline') length = ctx.details.baselineTraces?.length ?? 0;
+      else if (live && msg.list === 'error') length = ctx.details.errorTraces.length;
+      else if (live && msg.list === 'slow') length = ctx.details.slowTraces.length;
+      else return undefined;
+      const i = index(msg.index, length);
       return i === undefined ? undefined : { type: 'revealTrace', seq: ctx.seq, list: msg.list, index: i };
     }
     case 'openSource': {
-      if (msg.seq !== ctx.seq || !ctx.details) return undefined;
+      if (!live || msg.seq !== ctx.seq || !ctx.details) return undefined;
       const i = index(msg.index, ctx.details.sources.length);
       return i === undefined ? undefined : { type: 'openSource', seq: ctx.seq, index: i };
     }
