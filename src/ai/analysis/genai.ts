@@ -22,6 +22,7 @@ import {
   taggedSpans,
   traceRef,
 } from './common';
+import { byCodeUnit } from '../../compare';
 
 const LLM_OPS = new Set(['chat', 'text_completion', 'generate_content', 'embeddings']);
 const AGENT_OPS = new Set(['invoke_agent', 'create_agent']);
@@ -86,7 +87,7 @@ function unionMs(ranges: [number, number][], lo: number, hi: number): number {
 
 function contentChars(attrs: KeyValueMap): Record<string, number> | undefined {
   const out: Record<string, number> = {};
-  for (const k of Object.keys(attrs).filter(isGenAiContentKey).sort()) {
+  for (const k of Object.keys(attrs).filter(isGenAiContentKey).sort(byCodeUnit)) {
     const v = attrs[k];
     out[k] = typeof v === 'string' ? v.length : JSON.stringify(v)?.length ?? 0;
   }

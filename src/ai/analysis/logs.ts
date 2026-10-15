@@ -21,6 +21,7 @@ import {
   selectInstances,
   sourceRef,
 } from './common';
+import { byCodeUnit } from '../../compare';
 
 const MAX_ATTRS = 10;
 const MAX_LOG_REFS = 5;
@@ -83,7 +84,7 @@ export function queryLogs(store: TelemetryStore, input: QueryLogsInput, ctx: Ana
   const shown = hits.slice(0, input.limit);
   const logs = shown.map(({ log, instanceId, service, time }) => {
     const picked: Record<string, unknown> = {};
-    for (const k of Object.keys(log.attrs).filter((k) => !isGenAiContentKey(k)).sort().slice(0, MAX_ATTRS)) {
+    for (const k of Object.keys(log.attrs).filter((k) => !isGenAiContentKey(k)).sort(byCodeUnit).slice(0, MAX_ATTRS)) {
       setOwn(picked, k, log.attrs[k]);
     }
     return {

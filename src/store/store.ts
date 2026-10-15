@@ -19,6 +19,7 @@ import {
   Trace,
 } from './model';
 import { RingBuffer } from './ringBuffer';
+import { byCodeUnit } from '../compare';
 
 // Time-ordered history for one metric series (a metric name + attribute set + field).
 export interface MetricSeries {
@@ -115,7 +116,7 @@ export interface TraceLogs {
 type Listener = () => void;
 
 export function attrsKey(attrs: KeyValueMap): string {
-  return JSON.stringify(Object.keys(attrs).sort().map((k) => [k, attrs[k]]));
+  return JSON.stringify(Object.keys(attrs).sort(byCodeUnit).map((k) => [k, attrs[k]]));
 }
 
 export class TelemetryStore {
@@ -283,7 +284,7 @@ export class TelemetryStore {
       return `${resource.serviceName}::${resource.serviceInstanceId}`;
     }
     const hash = createHash('sha1');
-    const keys = Object.keys(resource.attrs).sort();
+    const keys = Object.keys(resource.attrs).sort(byCodeUnit);
     hash.update(resource.serviceName);
     for (const k of keys) {
       hash.update(k);
@@ -595,7 +596,7 @@ export class TelemetryStore {
 
   private seriesKey(metricName: string, attrs: KeyValueMap, field: string): string {
     const hash = createHash('sha1');
-    for (const k of Object.keys(attrs).sort()) {
+    for (const k of Object.keys(attrs).sort(byCodeUnit)) {
       hash.update(k);
       hash.update('=');
       hash.update(String(attrs[k]));

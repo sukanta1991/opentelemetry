@@ -112,7 +112,7 @@ export function createWaterfallView(host: WaterfallHost): {
 
   function paintRows(): void {
     if (!virtualized()) {
-      wf.innerHTML = rows.map(rowHtml).join('');
+      wf.innerHTML = rows.map((r, i) => rowHtml(r, i)).join('');
       return;
     }
     const top = wf.scrollTop;

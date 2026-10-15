@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { byCodeUnit } from '../compare';
 import { KeyValueMap, Span, SpanKind, StatusCode } from '../store/model';
 
 export interface AttrEntry {
@@ -50,7 +51,7 @@ export interface WaterfallRow {
 
 export function toAttrEntries(attrs: KeyValueMap): AttrEntry[] {
   return Object.keys(attrs)
-    .sort()
+    .sort(byCodeUnit)
     .map((key) => {
       const v = attrs[key];
       if (v !== null && typeof v === 'object') {

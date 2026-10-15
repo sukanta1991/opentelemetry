@@ -2,6 +2,7 @@
 // Trace/span id resolution for AI tools. Synchronous so the store can't change mid-lookup.
 
 import { normalizeSpanId } from '../store/ids';
+import { byCodeUnit } from '../compare';
 import { TelemetryStore, TracePart } from '../store/store';
 import { parseTraceIdInput } from '../views/navigationTargets';
 
@@ -41,7 +42,7 @@ export function resolveTraceId(store: TelemetryStore, raw: unknown): { traceId: 
   }
   if (matches.size === 1) return { traceId: [...matches][0] };
   if (!matches.size) return { error: `no trace matches prefix ${prefix}; it may have been evicted from the in-memory buffer` };
-  return ambiguous('trace', raw, [...matches].sort());
+  return ambiguous('trace', raw, [...matches].sort(byCodeUnit));
 }
 
 export function resolveSpanId(parts: readonly TracePart[], raw: unknown): { spanId: string } | { error: string } {
@@ -61,7 +62,7 @@ export function resolveSpanId(parts: readonly TracePart[], raw: unknown): { span
   }
   if (matches.size === 1) return { spanId: [...matches][0] };
   if (!matches.size) return { error: `no span in this trace matches prefix ${prefix}` };
-  return ambiguous('span', raw, [...matches].sort());
+  return ambiguous('span', raw, [...matches].sort(byCodeUnit));
 }
 
 // Unique trace ids across instances, newest first by earliest start; ties broken by id.

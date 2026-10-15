@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Shared helpers for the analysis functions. No vscode import.
 
+import { byCodeUnit } from '../../compare';
 import { CodeLocation, KeyValueMap } from '../../store/model';
 import { Instance, TaggedSpan, TelemetryStore, TracePart } from '../../store/store';
 import { pickTraceInstance } from '../../views/navigationTargets';
@@ -41,13 +42,13 @@ export function selectInstances(
 ): { instances: Instance[] } | { error: string } {
   const all = store.getAllInstances();
   if (instanceId && !all.some((i) => i.id === instanceId)) {
-    const known = all.map((i) => i.id).sort().slice(0, MAX_KNOWN);
+    const known = all.map((i) => i.id).sort(byCodeUnit).slice(0, MAX_KNOWN);
     return { error: `instance ${JSON.stringify(instanceId)} not found; known instances: ${known.join(', ') || '(none)'}` };
   }
   const svc = service?.toLowerCase();
   const instances = all.filter((i) => (!instanceId || i.id === instanceId) && (!svc || i.serviceName.toLowerCase() === svc));
   if (service && !instances.length) {
-    const known = [...new Set(all.map((i) => i.serviceName))].sort().slice(0, MAX_KNOWN);
+    const known = [...new Set(all.map((i) => i.serviceName))].sort(byCodeUnit).slice(0, MAX_KNOWN);
     return { error: `no instance of service ${JSON.stringify(service)}; known services: ${known.join(', ') || '(none)'}` };
   }
   return { instances };
@@ -129,7 +130,7 @@ export function usefulAttrs(attrs: KeyValueMap, redactor: Redactor, max = 10): R
   const picked: KeyValueMap = {};
   const keys = Object.keys(attrs)
     .filter((k) => (USEFUL_KEYS.has(k) || USEFUL_PREFIXES.some((p) => k.startsWith(p))) && !isGenAiContentKey(k))
-    .sort()
+    .sort(byCodeUnit)
     .slice(0, max);
   for (const k of keys) setOwn(picked, k, attrs[k]);
   return safeValue(redactor.attrs(picked)) as Record<string, unknown>;

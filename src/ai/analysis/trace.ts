@@ -27,6 +27,7 @@ import {
   spansById,
   traceRef,
 } from './common';
+import { byCodeUnit } from '../../compare';
 
 const MAX_PATH_STEPS = 30;
 const TOP_N = 10;
@@ -120,7 +121,7 @@ export function getTraceDetail(store: TelemetryStore, input: GetTraceInput, ctx:
       .slice(0, MAX_EXCEPTIONS_PER_SPAN)
       .map((e) => {
         const picked: Record<string, unknown> = {};
-        for (const k of Object.keys(e.attrs).filter((k) => k.startsWith('exception.')).sort()) setOwn(picked, k, e.attrs[k]);
+        for (const k of Object.keys(e.attrs).filter((k) => k.startsWith('exception.')).sort(byCodeUnit)) setOwn(picked, k, e.attrs[k]);
         return safeValue(r.value(picked));
       });
     return {

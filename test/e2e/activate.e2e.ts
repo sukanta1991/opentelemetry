@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Activation integration test: loads the real bundled dist/extension.js against a
 // lightweight `vscode` API shim and asserts the extension wires up and starts the
-// receiver. Run with: npx ts-node test/e2e/activate.test.ts
+// receiver. Run with: npx ts-node test/e2e/activate.e2e.ts
 import * as assert from 'assert';
 import * as fs from 'fs';
 import Module = require('module');

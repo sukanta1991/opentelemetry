@@ -567,6 +567,8 @@ function renderableSelection(sel: MapSelection): boolean {
 
 // State updates apply immediately; DOM work is batched into one frame.
 window.addEventListener('message', (e: MessageEvent) => {
+  // The VS Code host frame posts with targetOrigin = its own origin, which is ours.
+  if (e.origin !== window.origin) return;
   const msg = e.data as HostMessage;
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {

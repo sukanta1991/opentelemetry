@@ -48,6 +48,7 @@ import {
   severityClass,
   sortLogs,
 } from './logView';
+import { byCodeUnit } from '../../compare';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -456,7 +457,7 @@ function onMove(e: MouseEvent): void {
 
 function onUp(): void {
   if (!drag) return;
-  const width = parseInt(drag.el.style.width, 10);
+  const width = Number.parseInt(drag.el.style.width, 10);
   if (width) state.columns = setColumnWidth(state.columns, drag.id, width);
   drag = null;
   document.body.classList.remove('col-resizing');
@@ -576,7 +577,7 @@ function groupedCatalogue(): Map<LogColumnGroup, LogColumnId[]> {
     const k = parseAttrColumn(c.id);
     if (k) keys.add(k);
   }
-  for (const k of [...keys].sort()) attrs.push(attrColumnId(k));
+  for (const k of [...keys].sort(byCodeUnit)) attrs.push(attrColumnId(k));
   return out;
 }
 
@@ -883,7 +884,7 @@ q.addEventListener('input', () => {
   apply(false);
 });
 level.addEventListener('change', () => {
-  state.level = parseInt(level.value, 10) || 0;
+  state.level = Number.parseInt(level.value, 10) || 0;
   persist();
   apply(false);
 });
@@ -989,7 +990,7 @@ function exportScopeRows(): WireLog[] {
 }
 
 function exportCount(): number {
-  const n = parseInt(exCount.value, 10);
+  const n = Number.parseInt(exCount.value, 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -1120,6 +1121,8 @@ function pruneSelection(): void {
 }
 
 window.addEventListener('message', (e: MessageEvent) => {
+  // The VS Code host frame posts with targetOrigin = its own origin, which is ours.
+  if (e.origin !== window.origin) return;
   const m = e.data as {
     type?: string;
     records?: WireLog[];

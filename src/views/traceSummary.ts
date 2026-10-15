@@ -3,6 +3,7 @@
 
 import { AttributeValue, Span } from '../store/model';
 import { TracePart } from '../store/store';
+import { byCodeUnit } from '../compare';
 import { ROOT_ATTR_KEY_LIMIT } from './webview/traceColumns';
 import { TraceRow } from './webview/traceView';
 
@@ -60,7 +61,7 @@ export function summarizeTrace(traceId: string, parts: readonly TracePart[]): Tr
       durationMs: Math.max(0, endMs - startMs),
       spanCount,
       errorCount,
-      services: [...services].sort(),
+      services: [...services].sort(byCodeUnit),
     },
   };
 }
@@ -81,7 +82,7 @@ export function collectRootAttrKeys(summaries: Iterable<TraceSummary>, limit = R
       if (keys.size >= limit) break outer;
     }
   }
-  return [...keys].sort();
+  return [...keys].sort(byCodeUnit);
 }
 
 export class TraceSummaryCache {
