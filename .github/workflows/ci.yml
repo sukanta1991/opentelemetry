@@ -12,6 +12,9 @@ permissions:
 
 jobs:
   build-and-test:
+    permissions:
+      contents: read
+      pull-requests: read
     strategy:
       fail-fast: false
       matrix:
@@ -22,6 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -42,7 +47,25 @@ jobs:
         run: npm run build
 
       - name: Test
+        if: matrix.os != 'ubuntu-latest' || matrix.node-version != 24
         run: npm test
+
+      - name: Test with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: npm run test:coverage
+
+      - name: Check Sonar token
+        id: sonar
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: echo "has_token=${{ env.SONAR_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sonar scan
+        if: steps.sonar.outputs.has_token == 'true'
+        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703 # v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   package:
     needs: build-and-test
