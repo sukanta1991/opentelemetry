@@ -5,10 +5,6 @@ import { Budget } from '../../src/store/cardinality/budget';
 import { DrainTemplater, maskToken, shapeOf, tokenize } from '../../src/store/cardinality/drain';
 import { LogRecord } from '../../src/store/model';
 import { buildLogBatches } from './ingestFixtures';
-import { CI_FACTOR, assertBudget } from './perfFixtures';
-
-// P8: 1.5 µs per log on the 50k-log fixture.
-const DRAIN_BUDGET_MS = 75 * CI_FACTOR;
 
 function templatesOf(bodies: string[], opts = {}): Map<string, number> {
   const d = new DrainTemplater(opts);
@@ -118,14 +114,6 @@ describe('Drain log templates', () => {
       const forward = templatesOf(logs.map((l) => String(l.body)));
       const reversed = templatesOf(logs.map((l) => String(l.body)).reverse());
       assert.deepStrictEqual([...reversed.entries()].sort(), [...forward.entries()].sort());
-    });
-
-    it(`templates 50k logs: median under ${DRAIN_BUDGET_MS} ms (P8)`, function () {
-      this.timeout(60_000);
-      assertBudget(() => {
-        const d = new DrainTemplater();
-        for (const l of logs) d.add(l.body, l.timeMs, 100);
-      }, DRAIN_BUDGET_MS);
     });
   });
 

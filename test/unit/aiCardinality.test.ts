@@ -153,7 +153,9 @@ describe('ai analyzeCardinality', () => {
     assert.strictEqual((run(now, {}, { baselines: noSummary }).result as any).baselineDelta, undefined);
   });
 
-  it('runs through the tool pipeline within the size cap at all caps, redacted', () => {
+  it('runs through the tool pipeline within the size cap at all caps, redacted', function () {
+    // Builds the all-caps fixture; slow under coverage instrumentation.
+    this.timeout(60_000);
     const big = fillToCaps();
     addLogs(big, 'logs0', [log({ timeMs: T0, body: `login ${SECRET}` })]);
     const settings = { enabled: true, redactAttributeKeys: [], maxResultItems: 200 };

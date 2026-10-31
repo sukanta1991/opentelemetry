@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
 import { LIVE_REALM, TelemetryStore } from '../../src/store/store';
+import { DrainTemplater } from '../../src/store/cardinality/drain';
 import { Snapshot } from '../../src/views/baseline';
 import { parseBaselineFile, serializeBaseline } from '../../src/views/baselineFile';
 import { captureCardinality, compareCardinality } from '../../src/views/cardinalityBaseline';
@@ -12,8 +13,11 @@ import { baselineView, detailTables, detailsOf, pricingView, summaryOf, tabData 
 import { DEFAULT_CARDINALITY_SETTINGS } from '../../src/views/cardinalityRules';
 import { TABS } from '../../src/views/webview/cardinalityView';
 import { CAPS, SPAN_INSTANCES, fillToCaps } from './cardinalityFixtures';
+import { buildLogBatches } from './ingestFixtures';
 import { CI_FACTOR, assertBudget } from './perfFixtures';
 
+// P8: 1.5 µs per log on the 50k-log fixture.
+const DRAIN_BUDGET_MS = 75 * CI_FACTOR;
 const FINDINGS_BUDGET_MS = 5 * CI_FACTOR;
 // Services plus instances of multi-instance services; runs at most every 2 s.
 const OVERVIEW_BUDGET_MS = 10 * CI_FACTOR;
@@ -21,6 +25,17 @@ const MODEL_BUDGET_MS = 50 * CI_FACTOR;
 const CAPTURE_BUDGET_MS = 20 * CI_FACTOR;
 const MAX_SUMMARY_BYTES = 200 * 1024;
 const MAX_MESSAGE_BYTES = 512 * 1024;
+
+describe('Drain performance', () => {
+  it(`templates 50k logs: median under ${DRAIN_BUDGET_MS} ms (P8)`, function () {
+    this.timeout(60_000);
+    const logs = buildLogBatches().flatMap((b) => b.logs);
+    assertBudget(() => {
+      const d = new DrainTemplater();
+      for (const l of logs) d.add(l.body, l.timeMs, 100);
+    }, DRAIN_BUDGET_MS);
+  });
+});
 
 describe('cardinality model performance (all caps)', function () {
   this.timeout(120_000);
