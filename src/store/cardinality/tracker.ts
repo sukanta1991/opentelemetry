@@ -99,7 +99,7 @@ const signalBuckets = (): SignalBuckets => ({
   proto: new Float64Array(BUCKETS),
   json: new Float64Array(BUCKETS),
 });
-const nanHistory = () => new Float32Array(BUCKETS).fill(NaN);
+const nanHistory = () => new Float32Array(BUCKETS).fill(Number.NaN);
 
 function toText(v: AttributeValue): string {
   if (typeof v === 'string') return v;
@@ -327,7 +327,7 @@ export class UsageTracker {
     const from = Math.max(prev, b - BUCKETS);
     const stamp = (history: Float32Array, estimate: number) => {
       for (let x = from; x < b; x++) history[x % BUCKETS] = estimate;
-      history[b % BUCKETS] = NaN;
+      history[b % BUCKETS] = Number.NaN;
     };
     const stampKey = (k: KeyStats) => stamp(k.history, k.distinct.estimate());
     this.spanKeys.forEach(stampKey);

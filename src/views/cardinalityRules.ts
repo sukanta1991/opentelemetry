@@ -155,7 +155,7 @@ export function growthOf(history: ArrayLike<number>): Growth {
   if (n < 4) return 'insufficient';
   const diffs = n - 1;
   const third = Math.max(1, Math.floor(diffs / 3));
-  let prev = NaN;
+  let prev = Number.NaN;
   let d = 0;
   let first = 0;
   let last = 0;

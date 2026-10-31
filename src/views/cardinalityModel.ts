@@ -234,7 +234,7 @@ function ringGrowth(t: UsageTracker, ring: Float32Array, estimate: number, head:
   if (n < 4) return 'insufficient';
   const diffs = n - 1;
   const third = Math.max(1, Math.floor(diffs / 3));
-  let prev = NaN;
+  let prev = Number.NaN;
   let d = 0;
   let early = 0;
   let late = 0;
@@ -272,7 +272,7 @@ function estimateOf(counters: readonly DistinctCounter[]): { distinct: number; a
   return { distinct: Math.round(merged.estimate()), approx: merged.approx };
 }
 
-const nanSeries = () => new Float64Array(BUCKETS).fill(NaN);
+const nanSeries = () => new Float64Array(BUCKETS).fill(Number.NaN);
 // Reused for growth checks, so flagging thousands of keys allocates no histories.
 const scratch = new Float64Array(BUCKETS);
 
@@ -336,7 +336,7 @@ class SingleKeyFacts implements KeyFacts {
 function keyFacts(scope: KeyScope, key: string, parts: Parts, win: BucketWindow): KeyFacts {
   if (parts.stats.length === 1) return new SingleKeyFacts(scope, key, parts.stats[0], parts.trackers[0], win.head);
   const fill = (out: Float64Array): Float64Array => {
-    out.fill(NaN);
+    out.fill(Number.NaN);
     for (let i = 0; i < parts.stats.length; i++) {
       const k = parts.stats[i];
       alignedHistory(parts.trackers[i], k.history, k.distinct.estimate(), win.head, out);
@@ -435,7 +435,7 @@ function aggregateService(service: string, instances: readonly Instance[], win: 
     });
     const series = estimateOf(p.stats.map((m) => m.series));
     const fill = (out: Float64Array): Float64Array => {
-      out.fill(NaN);
+      out.fill(Number.NaN);
       p.stats.forEach((m, i) => alignedHistory(p.trackers[i], m.history, m.series.estimate(), win.head, out));
       return out;
     };

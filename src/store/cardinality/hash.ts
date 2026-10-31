@@ -24,7 +24,7 @@ const C2 = 0x1b873593;
 /** MurmurHash3 (x86, 32-bit) over UTF-16 code units, two units per block. Returns an unsigned 32-bit int. */
 export function hashString(s: string, seed: number): number {
   const n = Math.min(s.length, MAX_HASHED_CHARS);
-  let h = seed | 0;
+  let h = seed >>> 0;
   let i = 0;
   for (; i + 1 < n; i += 2) {
     let k = s.charCodeAt(i) | (s.charCodeAt(i + 1) << 16);

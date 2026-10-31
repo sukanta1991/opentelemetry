@@ -65,7 +65,9 @@ export class CardinalityPanel {
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(controller.extensionUri, 'dist', 'webview')],
     });
-    CardinalityPanel.current = new CardinalityPanel(panel, controller, deps, scope ?? { realm: LIVE_REALM });
+    const created = new CardinalityPanel(panel, controller, deps, scope ?? { realm: LIVE_REALM });
+    CardinalityPanel.current = created;
+    void created.loadBaseline();
   }
 
   private constructor(
@@ -97,7 +99,6 @@ export class CardinalityPanel {
       })
     );
     if (deps.registry) this.disposables.push(deps.registry.onDidChange(() => void this.loadBaseline()));
-    void this.loadBaseline();
   }
 
   private setScope(scope: PanelScope): void {
