@@ -5,6 +5,25 @@ All notable changes to the **OpenTelemetry for VS Code** extension are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-31
+
+### Added
+
+- **Cardinality and cost analyzer.** Finds telemetry that makes storage, indexing or ingestion costs grow:
+  - Counts unique values per span, span event, log and metric attribute (exact up to 128, then HyperLogLog), metric series, span names, operations and log body patterns, plus bytes as uncompressed OTLP protobuf and OTLP JSON, as telemetry arrives. Counts are kept per instance with fixed limits and are not affected by retention.
+  - Findings: many unique values, ID-like values (UUIDs, IDs, tokens, emails, IPs, timestamps, URLs with query strings, paths with IDs, or known keys such as `url.full` and `user.id`), metric series explosions with the driving label, span names with IDs, and noisy log patterns. Each is Critical, Warning or Info, raised a level while its unique values keep growing, with a fix based on OpenTelemetry semantic conventions.
+  - A **Cardinality & Cost** panel with Overview, Attributes, Metrics, Log patterns, Span names, Baseline and Pricing tabs, for live data or a loaded session, one service or one instance. Rows open redacted examples, the value mix, a sparkline of unique values and the same key in other services.
+  - Count badges on noisy services and instances in the Instances view, a noisy-services badge on the view, and a flame status bar item for noisy live services.
+  - Monthly cost estimates **only from prices you enter**: per GB ingested, per million spans or log records, per active series and per GB-month retained, in protobuf or JSON size, with a traffic multiplier for production volume. Prices come from settings and can be overridden per workspace in the panel.
+  - Commands **Open Cardinality & Cost Analyzer** and **Analyze Cardinality & Cost** (on services, instances and loaded files).
+- Settings `otel.cardinality.enabled` (true), `minDistinct` (100), `minDistinctRatio` (0.1), `maxSeriesPerMetric` (500), `maxSpanNamesPerService` (100), and `otel.cost.currency`, `perGbIngested`, `perMillionSpans`, `perMillionLogs`, `perSeriesMonth`, `perGbMonthRetained`, `retentionDays`, `sizeModel` and `trafficMultiplier` (no prices by default).
+- AI tool `otel_analyzeCardinality` (`#otelCardinality`): findings with redacted examples and fixes, volume per day, noisiest services and operations, a cost estimate when prices are set, and changes since the active baseline. Ask `@otel which attributes will blow up my telemetry bill?`.
+
+### Changed
+
+- Baselines include a cardinality summary (attribute keys, metric names, counts and value classes; no values). Baseline files are now version 2; version 1 files still load. The Baseline tab and **Copy comparison report** list new, grown and resolved findings and volume changes.
+- Counting adds about 1.3 µs per span, 1.7 µs per log record and 0.5 µs per metric point while `otel.cardinality.enabled` is on.
+
 ## [1.2.0] - 2026-10-15
 
 ### Added

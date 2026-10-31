@@ -101,6 +101,24 @@
         <li><strong>⚠ n% not in baseline</strong>: much of what is running now wasn't in the baseline, so it was probably captured from a different setup. Capture a new baseline, or set <code>otel.serviceMap.baseline.coverageWarnPct</code> to <code>0</code> to hide the badge.</li>
       </ul>
 
+      <h2 id="cardinality-labels">The cardinality analyzer shows ≈, “truncated” or “too little data”</h2>
+      <ul>
+        <li><strong>≈</strong> marks an estimate: above 128 unique values a key is counted with HyperLogLog, accurate to a few percent.</li>
+        <li><strong>truncated</strong> means a limit was reached (attribute keys, metrics, operations or log patterns per instance, or 500 rows per table). The largest items are still listed; the rest are counted as <strong>(other)</strong>.</li>
+        <li><strong>… too little data</strong> means fewer than 4 one-minute buckets of history, so growth can't be judged yet. Send traffic for a few more minutes.</li>
+      </ul>
+
+      <h2 id="cardinality-empty">The cardinality analyzer is empty or missing</h2>
+      <ul>
+        <li>Check that <code>otel.cardinality.enabled</code> is on. While it is off the panel says so, and the badges, status bar item and menu entries are hidden.</li>
+        <li>Counting starts when telemetry arrives with the analyzer on. Telemetry received while it was off, or before it was turned back on, is not counted.</li>
+        <li>The status bar item appears only when a <strong>live</strong> service has warning or critical findings. Findings in loaded files show as badges in the Instances view.</li>
+      </ul>
+
+      <h2 id="cardinality-cost">The cost estimate doesn't match my bill</h2>
+      <p>The estimate is a projection of local traffic with your prices. Real bills also depend on compression, sampling, indexing and per-request fees, free tiers and commitments, and on fields the extension doesn't keep (start times, exemplars, dropped counts). Active series are the unique series seen since counting started, not a monthly peak. Use the <strong>traffic multiplier</strong> to scale local volume to production, and the <strong>Assumptions</strong> list in the Pricing tab to see what was included. See <a href="features.html#cardinality-cost">Cost estimates</a>.</p>
+      <p>No estimate at all? Nothing is priced until you set at least one price, in the <code>otel.cost.*</code> settings or the Pricing tab.</p>
+
       <h2 id="empty-settings">The settings gear opens an empty page</h2>
       <p>This was fixed in <code>0.1.2</code>. Update to the latest version, or open settings manually and search for “OpenTelemetry”.</p>
 

@@ -29,6 +29,7 @@ export class OtelController {
       settings.maxTracesPerInstance,
       settings.maxMetricPointsPerSeries
     );
+    this.store.setCardinality(settings.cardinalityEnabled);
     this.receiver = new Receiver(resolveProtoRoot(extensionPath), this.store);
     this.statusBar = new StatusBar();
   }
@@ -110,6 +111,10 @@ export class OtelController {
   reloadRetention(): void {
     const s = readSettings();
     this.store.setRetention(s.maxLogsPerInstance, s.maxTracesPerInstance, s.maxMetricPointsPerSeries);
+  }
+
+  reloadCardinality(): void {
+    this.store.setCardinality(readSettings().cardinalityEnabled);
   }
 
   /** Endpoint apps should export to (gRPC by convention, matching OTEL default). */

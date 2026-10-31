@@ -4,7 +4,7 @@
 
 Capture OTLP logs, traces, and metrics with a receiver built into the editor. There is no Jaeger, Zipkin, or OpenTelemetry Collector to run. Inspect requests next to your code, jump from a span or log to its source line, see how your services connect and, if you turn it on, ask Copilot to investigate. It works whether your app is launched from VS Code or runs elsewhere, and the data stays in memory on your machine.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v1.2.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v1.3.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 
@@ -71,6 +71,13 @@ observability backend. You can also send data to both at once (see [Apps running
 - Click a service to open its traces, logs, metrics, slowest and failing traces, and source files.
 - **Baselines:** capture a "before" snapshot, change your code, and see which services, calls and operations regressed, improved, appeared or disappeared, with statistical tests so noise isn't flagged.
 
+### Cardinality and cost
+
+- Finds telemetry that makes storage, indexing or ingestion costs grow: attributes with many unique values, IDs, full URLs and emails used as attributes, metric series explosions and the label driving them, span names with IDs in them, and noisy log patterns.
+- Shows the noisiest services and operations, volume and bytes per minute, day and month, and whether unique values are still growing.
+- Estimates monthly cost **only from prices you enter**; nothing is priced by default.
+- Counts survive retention, so the numbers cover everything received, not just what is still in memory.
+
 ### OTLP receiver
 
 - OTLP/gRPC on `4317` and OTLP/HTTP (protobuf and JSON) on `4318`, bound to `127.0.0.1`.
@@ -82,7 +89,7 @@ observability backend. You can also send data to both at once (see [Apps running
 ### AI investigation (optional, off by default)
 
 - The `@otel` chat participant with `/slow`, `/errors`, and `/agent`.
-- Ten read-only `otel_*` tools for Copilot agent mode.
+- Eleven read-only `otel_*` tools for Copilot agent mode.
 - Answers cite trace and span IDs, with buttons back to the data.
 
 See [Features in depth](#features-in-depth) for the full list.
@@ -104,6 +111,10 @@ See [Features in depth](#features-in-depth) for the full list.
 **Service map baselines:** mark a baseline, change your code, and the map shows what changed: regressed calls in red, improvements in blue, new and removed dependencies, and before → after numbers per service, call and operation:
 
 ![Service map compared with a baseline, showing a regressed checkout service and its database call](images/screenshots/service-map-baseline.png)
+
+**Cardinality and cost:** see which attributes, metrics, span names and log patterns will make your telemetry bill grow, with redacted example values, a fix for each finding, and a monthly estimate from your own prices:
+
+![Cardinality and cost analyzer with findings, volume per signal and the noisiest services](images/screenshots/cardinality.png)
 
 **Metrics:** the **Graph** view renders each metric as a chart, with per-graph dropdowns for the chart type, the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
 
@@ -187,6 +198,14 @@ Going the other way works too: select a log and click **View Trace** (or click i
 
 To compare against a run you saved earlier, load the session file and choose **Use a loaded session…** from the same menu.
 
+**Find telemetry that will cost you in production**
+
+1. Run your app and send representative traffic for a few minutes.
+2. Click **Open Cardinality & Cost Analyzer** in the Instances view's **…** menu, the flame status bar item, or right-click a service and choose **Analyze Cardinality & Cost**. Services with findings show a badge in the Instances view.
+3. On **Overview**, start with the critical findings. Select one for redacted example values, the value mix, how its unique values grew, and the fix (for example "group by `http.route` instead of `url.full`").
+4. Open **Pricing**, enter your backend's prices and a **traffic multiplier** (production volume ÷ local volume), and click **Calculate** to see a monthly estimate. **Save for this workspace** keeps the prices.
+5. Capture a baseline before and after a fix: the **Baseline** tab lists new, grown and resolved findings and volume changes.
+
 ## Privacy and data handling
 
 The extension is built for local development. It has no backend and makes no outbound network calls of its own. Its only network activity is the OTLP receiver listening for your apps.
@@ -201,6 +220,8 @@ your app ── OTLP ──▶ 127.0.0.1:4317 (gRPC) / 127.0.0.1:4318 (HTTP) ─
 - Live telemetry is held in memory only. It is capped by the `otel.retention.*` settings and dropped when the receiver restarts or you run **Clear Collected Data**.
 - Telemetry is never written to disk unless you export it yourself.
 - **Saved baselines** are written to the extension's local storage for the workspace (global storage when no folder is open) on this machine. They hold aggregates only: service, dependency, route and operation names, call counts, error counts, sampled latencies, and up to 2 example trace IDs per item, but no attributes, log bodies or span payloads. Unsaved baselines stay in memory. **Export Baseline…** warns that the file contains names and trace IDs before writing it.
+- **Cardinality counters** keep hashes of attribute values (never the values), counts, byte sizes, log patterns and a few example values per key. Examples are redacted with the same rules as the AI features and cut to 120 characters, and everything stays in memory with fixed limits. Baselines also store a cardinality summary: attribute keys, metric names, counts and value classes, but no values or examples. Turning off `otel.cardinality.enabled` frees the counters.
+- **Prices** you save in the Cardinality & Cost panel are kept in this workspace's VS Code state, not in a file.
 
 **AI features (optional)**
 
@@ -279,6 +300,7 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
 | `@otel /errors` | Groups recent failing requests by endpoint and explains the top failure. |
 | `@otel /agent` | Summarizes the latest AI-agent run: LLM vs. tool time, token usage, slowest and failed tools. |
 | `@otel what regressed since my baseline?` | Compares current traffic with the active service map baseline and explains the biggest regressions, with example traces. |
+| `@otel which attributes will blow up my telemetry bill?` | Lists high-cardinality attributes, metric labels and noisy services with fixes, and a cost estimate if you set prices. |
 
 **In agent mode**, or with any chat participant, reference the tools directly with `#`, e.g. *"#otelTraces show failing checkout requests from the last 10 minutes"*.
 
@@ -294,6 +316,7 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
 | `otel_getServiceMap` | `#otelServiceMap` | Service dependencies with call counts and error rates |
 | `otel_genAiSummary` | `#otelAgent` | An AI-agent trace (OpenTelemetry `gen_ai.*` conventions): time split, tokens per model, slowest and failed calls |
 | `otel_compareBaseline` | `#otelBaseline` | Current traffic (or another baseline) compared with a service map baseline: what regressed, improved, appeared or disappeared, by service, call or operation |
+| `otel_analyzeCardinality` | `#otelCardinality` | High-cardinality attributes and metric labels, ID-like values, noisy services, operations and log patterns, volume per day, a cost estimate when you set prices, and changes since the active baseline |
 
 **Privacy.** The tools are read-only, each call is confirmed, and results are redacted before they reach the model you selected. See [Privacy and data handling](#privacy-and-data-handling) for exactly what is sent.
 
@@ -344,7 +367,14 @@ Ask questions in chat such as *"why is my slowest request slow?"* or *"what did 
   - In the same session, only calls that finished after the baseline was taken count as "current", so nothing is counted twice. A **⚠ n% not in baseline** badge warns when much of the current map is missing from the baseline (`coverageWarnPct`).
   - **Manage** from the same menu: switch the active baseline, save (up to 50 saved; up to 5 unsaved are kept in memory), rename, delete, export to and import from a `.json` file, or **Compare two baselines** in a read-only map. **Copy comparison report** puts a Markdown table on the clipboard. The status bar shows the active baseline with its regressed and improved counts.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
-- **Ask Copilot** (opt-in) — the `@otel` chat participant and ten `otel_*` tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
+- **Cardinality and cost analyzer** — finds telemetry that drives storage, indexing and ingestion cost:
+  - **Counting:** every span, span event, log and metric point is counted as it arrives, per instance: unique values per attribute key (exact up to 128, then a HyperLogLog estimate shown with ≈), metric series and unique values per label, span names, operations, log body patterns (Drain-style, with numbers, IDs, IPs, URLs and quoted text masked), and bytes as uncompressed OTLP protobuf and OTLP JSON. Counts are not affected by retention. Resource attributes are not analyzed. Limits: 512 keys per instance and 4096 in total, 500 operations, 500 metrics and 500 log patterns per instance; anything over a limit is counted as "(other)" and the panel says **truncated**.
+  - **Findings:** **Many unique values** (at least `otel.cardinality.minDistinct` unique values and `minDistinctRatio` unique values per use), **ID-like values** (UUIDs, hex and numeric IDs, tokens, emails, IP addresses, timestamps, URLs with query strings, paths with IDs, or a known key such as `user.id` or `url.full`, with at least 20 unique values), **Many metric series** (at least `maxSeriesPerMetric`, naming the label that drives them; an ID-like label is critical), **Many span names** (at least `maxSpanNamesPerService`, or at least 20% of names with IDs in them) and **Noisy log pattern** (one pattern is at least half of a service's logs). Findings are **Critical ✖**, **Warning ▲** or **Info ℹ**; a finding whose unique values are still growing is raised one level. Each comes with a fix based on OpenTelemetry semantic conventions.
+  - **Panel tabs:** Overview (volume per minute, day and month per signal, active series, findings, noisiest services and operations), Attributes, Metrics, Log patterns, Span names, Baseline and Pricing. Pick live data or a loaded session, a service and an instance. Select a row for redacted examples, the value mix, a sparkline of unique values over time and the same key in other services.
+  - **Badges:** services and instances with warning or critical findings get a count badge in the Instances view, the view shows how many services are noisy, and the status bar shows a flame icon with the number of noisy live services. They update at most every 2 seconds, only after new data.
+  - **Cost:** from your prices per GB ingested, million spans, million log records, active series per month and GB-month retained (with retention days), in OTLP protobuf or JSON size, scaled by a traffic multiplier. Rates use the last 15 minutes of data, projected to 30-day months. Prices come from the `otel.cost.*` settings; the Pricing tab can override them for one workspace, and **Reset to settings** removes the overrides.
+  - **Baselines** now include a cardinality summary, so the Baseline tab and **Copy comparison report** list new, grown and resolved findings and per-service volume changes. Baseline files from earlier versions still load (without that section).
+- **Ask Copilot** (opt-in) — the `@otel` chat participant and eleven `otel_*` tools answer questions about your traces, logs, metrics, AI-agent runs and telemetry cost, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
 
 ## Trace query syntax
 
@@ -397,6 +427,8 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | `OpenTelemetry: Export Baseline…` / `Import Baseline…` | Write a baseline to a `.json` file, or load one (validated, up to 8 MB). |
 | `OpenTelemetry: Copy Baseline Comparison Report` | Copy the comparison as a Markdown table. |
 | `OpenTelemetry: Stop Comparing With Baseline` | Turn off the active baseline. |
+| `OpenTelemetry: Open Cardinality & Cost Analyzer` | Open the analyzer for all live data (also in the Instances view's **…** menu and on the flame status bar item). |
+| `OpenTelemetry: Analyze Cardinality & Cost` | Right-click a service, instance or loaded file in the Instances view to open the analyzer for it. |
 
 Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action. Right-click a trace in the Traces panel for **Export Trace…**.
 
@@ -426,6 +458,20 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.serviceMap.baseline.minErrorRateChangePp` | `2` | Baselines: a significant error-rate change counts only if it is at least this many percentage points. |
 | `otel.serviceMap.baseline.minFanoutChange` | `1` | Baselines: change in calls per request on a call (e.g. an N+1 query) that counts as a regression or improvement. |
 | `otel.serviceMap.baseline.coverageWarnPct` | `30` | Baselines: warn when at least this percentage of the current services and dependencies are missing from the baseline. `0` turns it off. |
+| `otel.cardinality.enabled` | `true` | Count attribute values, metric series, log patterns and bytes for the cardinality and cost analyzer. Off frees the counters; on counts from that moment. |
+| `otel.cardinality.minDistinct` | `100` | Unique values an attribute needs to be flagged (10–100000); ten times this can be critical. |
+| `otel.cardinality.minDistinctRatio` | `0.1` | Unique values per use (0–1) an attribute also needs to be flagged. |
+| `otel.cardinality.maxSeriesPerMetric` | `500` | Series a metric needs to be flagged (10–1000000); ten times this is critical. |
+| `otel.cardinality.maxSpanNamesPerService` | `100` | Unique span names a service needs to be flagged (5–100000); ten times this is critical. |
+| `otel.cost.currency` | `USD` | Currency code shown with prices (display only). |
+| `otel.cost.perGbIngested` | empty | Price per GB ingested (10^9 bytes). Nothing is priced until at least one price is set. |
+| `otel.cost.perMillionSpans` | empty | Price per million spans. |
+| `otel.cost.perMillionLogs` | empty | Price per million log records. |
+| `otel.cost.perSeriesMonth` | empty | Price per active metric series per month. |
+| `otel.cost.perGbMonthRetained` | empty | Storage price per GB per month; needs `otel.cost.retentionDays`. |
+| `otel.cost.retentionDays` | empty | Days your backend keeps data (1–3650). |
+| `otel.cost.sizeModel` | `protobuf` | Which payload size per-GB prices apply to: `protobuf` or `json`. |
+| `otel.cost.trafficMultiplier` | `1` | Scales local volume to production (e.g. `500`); not applied to metric series. |
 | `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
 | `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
 | `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
@@ -479,6 +525,17 @@ Live telemetry is stored **in memory** and is cleared when the receiver restarts
 - **Too few calls to compare ?**: each side needs at least `otel.serviceMap.baseline.minSamples` calls (default 20) for that service, call or operation. Send more traffic, pick a longer time window, or lower the setting.
 - In **vs Baseline** mode the time window starts at the later of the window start and the baseline cut-off, so a short window can hold fewer calls than in normal mode.
 - **⚠ n% not in baseline**: much of what is running now wasn't in the baseline, so it was probably captured from a different setup. Capture a new baseline, or set `otel.serviceMap.baseline.coverageWarnPct` to `0` to hide the badge.
+
+### The cardinality analyzer shows ≈, "truncated" or "too little data"
+
+- **≈** marks an estimate: above 128 unique values a key is counted with HyperLogLog, accurate to a few percent.
+- **truncated** means a limit was reached (keys, metrics, operations or log patterns per instance, or 500 rows per table). The largest items are still listed; the rest are counted as "(other)".
+- **… too little data** means fewer than 4 one-minute buckets of history, so growth can't be judged yet.
+- Nothing shows at all: check that `otel.cardinality.enabled` is on. Counting starts when it is turned on; telemetry received before that is not counted.
+
+### The cost estimate doesn't match my bill
+
+The estimate is a projection of local traffic with your prices. Real bills also depend on compression, sampling, indexing and per-request fees, free tiers and commitments, and on fields the extension doesn't keep (start times, exemplars, dropped counts). Use the **traffic multiplier** to scale local volume to production, and the **Assumptions** list in the Pricing tab to see what was included.
 
 ### The settings gear opens an empty page
 

@@ -3,14 +3,16 @@
 
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { readBaselineSettings, useLocalTime } from '../settings';
+import { readBaselineSettings, readCardinalitySettings, useLocalTime } from '../settings';
 import { LIVE_REALM } from '../store/store';
-import { SnapshotSourceKind, captureSnapshot } from './baseline';
+import { Snapshot, SnapshotSourceKind, captureSnapshot } from './baseline';
 import { ComparisonResult, compareSnapshots } from './baselineCompare';
 import { exportBaselineToFile, importBaselineFromFile } from './baselineIo';
 import { buildComparedMap } from './baselineMap';
 import { BaselineMeta, BaselineRegistry, MAX_UNSAVED_BASELINES } from './baselineRegistry';
 import { buildBaselineReport } from './baselineReport';
+import { captureCardinality, compareCardinality } from './cardinalityBaseline';
+import { CardinalityComparison } from './cardinalitySummary';
 import { clockTime, formatTimestamp, parseClockTime } from './format';
 import { ServiceMapModel } from './serviceMapModel';
 import { TIME_RANGE_LABEL, TIME_RANGE_OPTIONS, TIME_RANGE_SECONDS } from './webview/timeRange';
@@ -70,6 +72,8 @@ export async function captureBaseline(
     vscode.window.showInformationMessage('No calls to capture in that range yet.');
     return undefined;
   }
+  const cardinality = captureCardinality(controller.store.getAllInstances(), { realm });
+  if (cardinality) snapshot.cardinality = cardinality;
   const to = snapshot.source.toMs;
   const name =
     kind === 'session' ? `Session ${session ?? ''}` : kind === 'mark' ? `Mark ${until(to)}` : kind === 'time' ? `Until ${until(to)}` : `Window to ${until(to)}`;
@@ -232,6 +236,13 @@ export async function captureAtFromCommand(deps: BaselineDeps): Promise<void> {
   if (toMs !== undefined) await captureBaseline(deps, LIVE_REALM, 'time', { toMs });
 }
 
+// Baseline A against B, or against the live usage counters; undefined when either side has none.
+function cardinalityChanges(deps: BaselineDeps, a: Snapshot, b: Snapshot | undefined): CardinalityComparison | undefined {
+  if (!a.cardinality) return undefined;
+  const current = b ? b.cardinality : captureCardinality(deps.controller.store.getAllInstances(), { realm: LIVE_REALM });
+  return current && compareCardinality(a.cardinality, current, readCardinalitySettings());
+}
+
 // Active baseline against live calls, or baseline A against B; copied as Markdown.
 export async function copyBaselineReport(deps: BaselineDeps, compare?: { a: string; b: string }): Promise<void> {
   const { registry, controller } = deps;
@@ -265,7 +276,8 @@ export async function copyBaselineReport(deps: BaselineDeps, compare?: { a: stri
   }
   const local = useLocalTime();
   const time = (ms: number) => formatTimestamp(ms, local).slice(0, 19).replace('T', ' ') + (local ? '' : ' UTC');
-  const text = buildBaselineReport(result, { baseline: registry.get(aId) ?? a.meta, against, cutoffMs, time });
+  const cardinality = cardinalityChanges(deps, a.snapshot, b?.snapshot);
+  const text = buildBaselineReport(result, { baseline: registry.get(aId) ?? a.meta, against, cutoffMs, time, cardinality });
   await vscode.env.clipboard.writeText(text);
   vscode.window.showInformationMessage('Copied the baseline comparison (Markdown) to the clipboard.');
 }

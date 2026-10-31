@@ -82,3 +82,35 @@ export class BaselineStatus {
     this.item.dispose();
   }
 }
+
+export interface CardinalityStatusState {
+  noisyServices: number;
+  findings: { critical: number; warning: number; info: number };
+  services: string[];
+}
+
+// Shown only while live services have warning or critical cardinality findings.
+export class CardinalityStatus {
+  private item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
+
+  constructor() {
+    this.item.command = 'otel.openCardinality';
+  }
+
+  update(state: CardinalityStatusState | undefined): void {
+    if (!state?.noisyServices) {
+      this.item.hide();
+      return;
+    }
+    const { noisyServices: n, findings, services } = state;
+    this.item.text = `$(flame) ${n}`;
+    this.item.tooltip =
+      `${n} live service${n === 1 ? '' : 's'} may drive up telemetry cost (${findings.critical} critical, ${findings.warning} warning findings)` +
+      `${services.length ? `: ${services.join(', ')}${n > services.length ? ', …' : ''}` : ''}. Click to open the cardinality analyzer.`;
+    this.item.show();
+  }
+
+  dispose(): void {
+    this.item.dispose();
+  }
+}

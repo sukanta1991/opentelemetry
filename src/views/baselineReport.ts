@@ -3,6 +3,7 @@
 
 import { ComparisonResult, KeyComparison, MetricDelta, Verdict } from './baselineCompare';
 import { BaselineLabel } from './baselineMap';
+import { CardinalityChange, CardinalityComparison, ChangeVerdict } from './cardinalitySummary';
 
 export const REPORT_MAX_ROWS = 50;
 const MAX_CELL = 120;
@@ -25,6 +26,8 @@ export interface ReportMeta {
   against: string;
   cutoffMs?: number;
   time: (ms: number) => string;
+  // Present when both sides have usage counters.
+  cardinality?: CardinalityComparison;
 }
 
 // Names come from telemetry: flatten to one line, escape Markdown, and bound the length.
@@ -77,6 +80,50 @@ function table(keys: KeyComparison[], labels: Map<string, string>, withOp: boole
 const byImportance = (a: KeyComparison, b: KeyComparison) =>
   ORDER[a.verdict] - ORDER[b.verdict] || (b.current?.count ?? b.base?.count ?? 0) - (a.current?.count ?? a.base?.count ?? 0);
 
+const CARD_GLYPH: Record<ChangeVerdict, string> = { new: '✚', grown: '⬆', resolved: '✔' };
+const uniques = (v: number | undefined) => (v === undefined ? '–' : `${Math.round(v)}`);
+const rate = (v: number) => (v >= 10 ? `${Math.round(v)}` : `${Math.round(v * 10) / 10}`);
+
+function bytes(v: number): string {
+  if (v < 1024) return `${Math.round(v)} B`;
+  if (v < 1024 * 1024) return `${Math.round((v / 1024) * 10) / 10} KB`;
+  return `${Math.round((v / 1024 / 1024) * 10) / 10} MB`;
+}
+
+function cardinalityName(c: CardinalityChange): string {
+  if (c.kind === 'metric') return `${escapeCell(c.key)} (metric${c.driver !== undefined ? `, by ${escapeCell(c.driver)}` : ''})`;
+  return `${escapeCell(c.key)} (${c.scope === 'span.event' ? 'span event' : c.scope})`;
+}
+
+function cardinalitySection(c: CardinalityComparison, maxRows: number): string[] {
+  const out = [
+    '',
+    '### Cardinality',
+    '',
+    `**${CARD_GLYPH.new} ${c.summary.new} new · ${CARD_GLYPH.grown} ${c.summary.grown} grown · ${CARD_GLYPH.resolved} ${c.summary.resolved} resolved** ` +
+      'high-cardinality attributes and metrics',
+  ];
+  if (c.changes.length) {
+    out.push('', '| | Service | Attribute or metric | Unique values |', '|---|---|---|---|');
+    for (const x of c.changes.slice(0, maxRows)) {
+      out.push(`| ${CARD_GLYPH[x.verdict]} | ${escapeCell(x.service)} | ${cardinalityName(x)} | ${uniques(x.base)} → ${uniques(x.current)} |`);
+    }
+    if (c.changes.length > maxRows) out.push('', `…and ${c.changes.length - maxRows} more.`);
+  }
+  if (c.volume.length) {
+    out.push('', '| Service | Signal | Records per minute | Bytes per minute |', '|---|---|---|---|');
+    for (const v of c.volume.slice(0, maxRows)) {
+      const p = Number.isFinite(v.change) ? ` (${v.change >= 0 ? '+' : '−'}${Math.abs(Math.round(v.change * 100))}%)` : ' (new)';
+      out.push(`| ${escapeCell(v.service)} | ${v.signal} | ${rate(v.base)} → ${rate(v.current)}${p} | ${bytes(v.baseBytes)} → ${bytes(v.currentBytes)} |`);
+    }
+    if (c.volume.length > maxRows) out.push('', `…and ${c.volume.length - maxRows} more.`);
+  }
+  if (c.addedServices.length) out.push('', `New services: ${c.addedServices.slice(0, maxRows).map(escapeCell).join(', ')}.`);
+  if (c.missingServices.length) out.push('', `Services not seen: ${c.missingServices.slice(0, maxRows).map(escapeCell).join(', ')}.`);
+  out.push('', '_Unique values count each side up to its capture time, not only the compared window. Rates cover the last 15 minutes._');
+  return out;
+}
+
 export function buildBaselineReport(result: ComparisonResult, meta: ReportMeta, maxRows = REPORT_MAX_ROWS): string {
   const labels = new Map(result.nodes.map((n) => [n.id, n.label]));
   const scopes = result.keys.filter((k) => k.op === undefined);
@@ -111,6 +158,7 @@ export function buildBaselineReport(result: ComparisonResult, meta: ReportMeta, 
   if (!scopes.some((k) => SHOWN.includes(k.verdict)) && !ops.some((k) => SHOWN.includes(k.verdict))) {
     out.push('', 'No significant changes.');
   }
+  if (meta.cardinality) out.push(...cardinalitySection(meta.cardinality, maxRows));
   out.push(
     '',
     '_Only statistically significant changes that also pass the minimum-change thresholds are listed ' +

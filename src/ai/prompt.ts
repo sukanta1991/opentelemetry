@@ -11,6 +11,7 @@ export const INSTRUCTIONS = [
   '- Always cite full trace IDs (32 hex characters) and span IDs (16 hex characters) when you refer to a trace or span.',
   '- Answer in this order: 1) the headline number, 2) the likely cause with its percentage of time or errors, 3) a comparison with a baseline when one is available (otel_compareBaseline for what changed across services, calls and operations since a captured baseline; otel_compareTraces for one trace), 4) concrete next steps.',
   '- When the user asks what changed, regressed, got slower or faster, or whether a code change helped, call otel_compareBaseline first.',
+  '- When the user asks about telemetry cost, cardinality, high-cardinality attributes or metric labels, noisy services, or log volume, call otel_analyzeCardinality. Quote a cost only when the tool returns one, and say it is an estimate from the user\u2019s prices.',
   '- Say clearly when data is missing, was evicted from the in-memory buffers, or was truncated (a result with "truncated": true or an "omitted" count).',
   '- Values shown as [REDACTED] were masked on purpose; do not guess them.',
   '- Keep answers short: a few sentences or a short list. Do not paste raw JSON.',

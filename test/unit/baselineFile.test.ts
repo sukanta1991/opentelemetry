@@ -1,22 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as assert from 'assert';
+import { LIVE_REALM, TelemetryStore } from '../../src/store/store';
 import { Snapshot } from '../../src/views/baseline';
 import {
   BASELINE_FORMAT,
+  BASELINE_VERSION,
   BaselineFileError,
   MAX_BASELINE_FILE_BYTES,
   parseBaselineFile,
   sanitizeBaselineName,
   serializeBaseline,
 } from '../../src/views/baselineFile';
-import { T0 } from './aiFixtures';
+import { captureCardinality } from '../../src/views/cardinalityBaseline';
+import { CardinalitySummary } from '../../src/views/cardinalitySummary';
+import { T0, addLogs, addSpans, log, span } from './aiFixtures';
 import { apiCalls, capture, tid } from './baselineFixtures';
 
 const sample = (): Snapshot => capture(apiCalls(Array.from({ length: 30 }, (_, i) => ({ endMs: T0 + i, ms: 5 + (i % 4), dbMs: 2, error: i === 3 }))));
 const fileOf = (snapshot = sample()) => JSON.parse(serializeBaseline({ name: 'main', createdMs: T0, snapshot }));
 
-function rejects(mutate: (f: any) => void, message: RegExp): void {
-  const f = fileOf();
+function usage(): CardinalitySummary {
+  const store = new TelemetryStore();
+  const ids = (i: number) => ({ traceId: tid(i), spanId: (i + 1).toString(16).padStart(16, '0') });
+  addSpans(store, 'api', Array.from({ length: 40 }, (_, i) => span({ ...ids(i), name: 'GET', startMs: T0 + i, attrs: { 'user.id': `u${i}`, tenant: 'a' } })));
+  addLogs(store, 'worker', [log({ timeMs: T0, body: 'done', attrs: { 'job.id': 'j1' } })]);
+  store.ingestMetrics([
+    {
+      resource: { serviceName: 'api', serviceInstanceId: 'i1', attrs: {} },
+      metrics: [{ name: 'hits', type: 'sum', monotonic: true, dataPoints: [{ attrs: { route: '/' }, timeMs: T0, value: 1 }] }],
+    },
+  ]);
+  return captureCardinality(store.getAllInstances(), { realm: LIVE_REALM })!;
+}
+
+const withUsage = (): Snapshot => ({ ...sample(), cardinality: usage() });
+
+function rejects(mutate: (f: any) => void, message: RegExp, snapshot?: Snapshot): void {
+  const f = fileOf(snapshot);
   mutate(f);
   assert.throws(() => parseBaselineFile(JSON.stringify(f)), (e: unknown) => e instanceof BaselineFileError && message.test(e.message));
 }
@@ -45,7 +65,7 @@ describe('baseline file', () => {
       ['[]', /must be an object/],
       ['null', /must be an object/],
       ['{"format":"otel-session","version":1}', /Not an OpenTelemetry baseline/],
-      ['{"format":"otel-baseline","version":2}', /newer version/],
+      ['{"format":"otel-baseline","version":3}', /newer version/],
       ['{"format":"otel-baseline","version":"1"}', /Unsupported/],
     ] as const) {
       assert.throws(() => parseBaselineFile(text), (e: unknown) => e instanceof BaselineFileError && message.test(e.message), text);
@@ -109,5 +129,80 @@ describe('baseline file', () => {
     assert.strictEqual(parsed.snapshot.entries[0].extra, undefined);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed.snapshot.entries[0], '__proto__'), false);
     assert.strictEqual(({} as any).polluted, undefined);
+  });
+
+  describe('cardinality summary (version 2)', () => {
+    it('round-trips the summary and omits it when absent', () => {
+      const snapshot = withUsage();
+      assert.ok(snapshot.cardinality!.services.length === 2 && snapshot.cardinality!.services[0].keys.length === 2);
+      const text = serializeBaseline({ name: 'main', createdMs: T0, snapshot });
+      assert.strictEqual(JSON.parse(text).version, BASELINE_VERSION);
+      assert.deepStrictEqual(parseBaselineFile(text), { name: 'main', createdMs: T0, snapshot });
+      assert.strictEqual('cardinality' in fileOf().snapshot, false);
+      assert.strictEqual('cardinality' in parseBaselineFile(serializeBaseline({ name: 'x', createdMs: T0, snapshot: sample() })).snapshot, false);
+    });
+
+    it('reads version 1 files and ignores a summary in them', () => {
+      const f = fileOf(withUsage());
+      f.version = 1;
+      const parsed = parseBaselineFile(JSON.stringify(f));
+      assert.strictEqual(parsed.snapshot.cardinality, undefined);
+      assert.strictEqual(parsed.snapshot.entries.length, sample().entries.length);
+    });
+
+    it('rejects malformed summaries', () => {
+      const snap = withUsage();
+      const bad = (mutate: (c: any) => void, message: RegExp) => rejects((f) => mutate(f.snapshot.cardinality), message, snap);
+      bad((c) => (c.services = {}), /services must be a list/);
+      bad((c) => (c.truncated = 'no'), /truncated must be true or false/);
+      bad((c) => (c.toMs = c.fromMs - 1), /before/);
+      bad((c) => (c.windowMinutes = -1), /windowMinutes/);
+      bad((c) => c.services.push({ ...c.services[0] }), /services lists "api" twice/);
+      bad((c) => (c.services[0].service = 5), /service must be text/);
+      bad((c) => (c.services[0].service = 'x'.repeat(2001)), /service must be text/);
+      bad((c) => (c.services[0].totals.traces.count = 1.5), /whole number/);
+      bad((c) => (c.services[0].perMinute.logs = null), /perMinute\.logs must be an object/);
+      bad((c) => (c.services[0].perMinute.traces.proto = -1), /≥ 0/);
+      bad((c) => (c.services[0].keysTruncated = 0), /keysTruncated/);
+      bad((c) => (c.services[0].keys[0].scope = 'metric'), /scope is not recognised/);
+      bad((c) => (c.services[0].keys[0].cls = 'secret'), /cls is not recognised/);
+      bad((c) => (c.services[0].keys[0].key = 'k'.repeat(257)), /key must be text/);
+      bad((c) => (c.services[0].keys[0].distinct = '9'), /distinct/);
+      bad((c) => (c.services[0].keys[0].approx = 'yes'), /approx/);
+      bad((c) => c.services[0].keys.push({ ...c.services[0].keys[0] }), /keys lists .* twice/);
+      bad((c) => (c.services[0].metrics[0].driver = ['route']), /driver must be text/);
+      bad((c) => c.services[0].metrics.push({ ...c.services[0].metrics[0] }), /metrics lists .* twice/);
+      bad((c) => (c.services[0].keys = Array.from({ length: 201 }, (_, i) => ({ ...c.services[0].keys[0], key: `k${i}` }))), /more than 200 items/);
+      bad((c) => {
+        const k = c.services[0].keys[0];
+        c.services = Array.from({ length: 6 }, (_, s) => ({
+          ...c.services[0],
+          service: `s${s}`,
+          keys: Array.from({ length: 200 }, (__, i) => ({ ...k, key: `k${i}` })),
+        }));
+      }, /more than 1000 keys/);
+      bad((c) => {
+        const m = c.services[0].metrics[0];
+        c.services = Array.from({ length: 6 }, (_, s) => ({
+          ...c.services[0],
+          service: `s${s}`,
+          metrics: Array.from({ length: 200 }, (__, i) => ({ ...m, name: `m${i}` })),
+        }));
+      }, /more than 1000 metrics/);
+      bad((c) => (c.services = Array.from({ length: 501 }, (_, s) => ({ ...c.services[0], service: `s${s}` }))), /more than 500 items/);
+    });
+
+    it('accepts empty keys and metric names and drops unknown fields', () => {
+      const f = fileOf(withUsage());
+      const c = f.snapshot.cardinality;
+      c.services[0].keys[0].key = '';
+      c.services[0].keys[0].sample = 'leaked value';
+      c.services[0].extra = 1;
+      const parsed = parseBaselineFile(JSON.stringify(f).replace('"scope"', '"__proto__":{"polluted":true},"scope"')).snapshot.cardinality as any;
+      assert.strictEqual(parsed.services[0].keys[0].key, '');
+      assert.strictEqual(parsed.services[0].keys[0].sample, undefined);
+      assert.strictEqual(parsed.services[0].extra, undefined);
+      assert.strictEqual(({} as any).polluted, undefined);
+    });
   });
 });

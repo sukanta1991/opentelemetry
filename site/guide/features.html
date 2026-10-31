@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Features in depth — OpenTelemetry for VS Code</title>
-  <meta name="description" content="Everything the Logs, Traces, Metrics and Service Map panels in OpenTelemetry for VS Code can do.">
+  <meta name="description" content="Everything the Logs, Traces, Metrics, Service Map and Cardinality &amp; Cost panels in OpenTelemetry for VS Code can do.">
   <link rel="canonical" href="https://sukanta1991.github.io/opentelemetry/guide/features.html">
   <meta name="theme-color" content="#1e1e2e">
   <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
@@ -172,7 +172,108 @@
         <li>In the same session only calls that finished after the baseline was taken count as current, so nothing is counted twice. A <strong>⚠ n% not in baseline</strong> badge warns when much of the current map is missing from the baseline.</li>
         <li><strong>Manage:</strong> switch the active baseline, save (up to 50; up to 5 unsaved are kept in memory), rename, delete, export to or import from a <code>.json</code> file, or <strong>Compare two baselines</strong> in a read-only map. The status bar shows the active baseline with its regressed and improved counts.</li>
         <li>Saved baselines are written to the extension's local storage on this machine. They hold aggregates only (names, counts, sampled latencies and up to 2 example trace IDs per item). Export warns about this before writing a file. See <a href="privacy.html#telemetry">Privacy</a>.</li>
+        <li>Baselines also hold a <a href="#cardinality-baselines">cardinality summary</a>. Baseline files from version 1.2 and earlier still load, without it.</li>
       </ul>
+
+      <h2 id="cardinality">Cardinality &amp; cost analyzer</h2>
+      <figure>
+        <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Cardinality &amp; Cost</span></div>
+          <img class="zoomable" src="../assets/img/screenshots/cardinality.png" width="2800" height="1640" loading="lazy" alt="Cardinality and cost analyzer with findings, volume per signal, the noisiest services and a selected url.full finding">
+        </div>
+        <figcaption>The Overview tab with a <code>url.full</code> finding selected: redacted examples and the fix.</figcaption>
+      </figure>
+      <p>Finds telemetry that makes storage, indexing or ingestion costs grow in production: attributes with many unique values, IDs used as attributes or metric labels, span names with IDs in them and noisy log patterns. Catch them while the code is still on your machine.</p>
+
+      <h3 id="cardinality-start">Quick start</h3>
+      <ol>
+        <li>Run your app and send representative traffic for a few minutes.</li>
+        <li>Open the analyzer: <strong>Open Cardinality &amp; Cost Analyzer</strong> in the Instances view's <strong>…</strong> menu, the flame item in the status bar, or right-click a service, instance or loaded file and choose <strong>Analyze Cardinality &amp; Cost</strong>.</li>
+        <li>On <strong>Overview</strong>, start with the critical findings. Select one (click, or Enter on a focused row) for redacted example values, the value mix, how its unique values grew and the fix.</li>
+        <li>Optionally open <strong>Pricing</strong> and enter your backend's prices to see a <a href="#cardinality-cost">monthly estimate</a>.</li>
+      </ol>
+
+      <h3 id="cardinality-counting">What is counted</h3>
+      <ul>
+        <li>Every span, span event, log record and metric point is counted <strong>as it arrives</strong>, per instance. Counts are not affected by retention, so they cover everything received since counting started, not just what is still in memory. Loaded session files are counted when they load.</li>
+        <li><strong>Unique values</strong> per attribute key, for span, span event, log and metric point attributes. Up to 128 values are counted exactly; above that a HyperLogLog estimate (accurate to a few percent) is shown with <strong>≈</strong>. Only hashes of the values are kept.</li>
+        <li><strong>Metric series</strong> (distinct attribute sets per metric) and unique values per label, <strong>span names</strong> and <strong>operations</strong> per service, and <strong>log patterns</strong>: log bodies grouped Drain-style after numbers, UUIDs, hex IDs, IP addresses, emails, URLs and quoted text are masked.</li>
+        <li>Resource attributes (<code>service.name</code>, <code>host.name</code>, …) are not analyzed.</li>
+        <li>Fixed limits keep memory bounded: 512 attribute keys per instance and 4096 in total, 500 operations, 500 metrics and 500 log patterns per instance. Anything over a limit is counted as <strong>(other)</strong> and the panel shows <strong>truncated</strong>.</li>
+      </ul>
+
+      <h3 id="cardinality-findings">What is flagged</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Finding</th><th scope="col">When</th><th scope="col">Severity</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Many unique values</strong></td><td>An attribute has at least <code>otel.cardinality.minDistinct</code> (100) unique values <em>and</em> at least <code>minDistinctRatio</code> (0.1) unique values per use.</td><td>Warning; critical at 10× <code>minDistinct</code>. Span and log attributes are critical only if they also hold at least 20% of that signal's bytes.</td></tr>
+            <tr><td><strong>ID-like values</strong></td><td>At least 20 unique values, and the values look like UUIDs, hex or numeric IDs, tokens, emails, IP addresses, timestamps, URLs with query strings or paths with IDs, or the key is a known one such as <code>user.id</code>, <code>session.id</code> or <code>url.full</code>.</td><td>Warning; critical as a metric label.</td></tr>
+            <tr><td><strong>Many metric series</strong></td><td>A metric has at least <code>maxSeriesPerMetric</code> (500) series. The label with the most unique values is named as the driver.</td><td>Warning; critical at 10×.</td></tr>
+            <tr><td><strong>Many span names</strong></td><td>A service has at least <code>maxSpanNamesPerService</code> (100) unique span names, or at least 20% of its names contain IDs (e.g. <code>GET /products/4123</code>).</td><td>Warning; critical at 10× <code>maxSpanNamesPerService</code>.</td></tr>
+            <tr><td><strong>Still growing</strong></td><td>New unique values are still arriving (see <a href="#cardinality-growth">growth</a>). Not a finding of its own: it raises the finding one level.</td><td>+1 level</td></tr>
+            <tr><td><strong>Noisy log pattern</strong></td><td>One log pattern is at least half of a service's logs (from 100 logs).</td><td>Info.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Severities are shown as <strong>Critical ✖</strong>, <strong>Warning ▲</strong> and <strong>Info ℹ</strong>. Each finding comes with a fix based on the OpenTelemetry semantic conventions, for example “group by <code>http.route</code> or <code>url.template</code> instead of <code>url.full</code>” or “use <code>db.query.summary</code> instead of <code>db.query.text</code>”.</p>
+
+      <h3 id="cardinality-panel">The panel</h3>
+      <ul>
+        <li><strong>Scope:</strong> pick live data or a loaded session, then a service and an instance.</li>
+        <li><strong>Overview:</strong> records per minute, day and month per signal with activity sparklines, bytes per minute, active metric series, findings by severity, the estimated monthly cost (when priced), all findings, the noisiest services and the top operations.</li>
+        <li><strong>Attributes</strong>, <strong>Metrics</strong> (with the driving label), <strong>Log patterns</strong> and <strong>Span names</strong> list everything counted, sorted by bytes, up to 500 rows each.</li>
+        <li><strong>Details:</strong> select a row for redacted example values (up to 3, cut to 120 characters), the value mix, a sparkline of unique values over time, the fix and the keys to use instead, and the same key in other services.</li>
+        <li><strong>Baseline</strong> and <strong>Pricing</strong>: see <a href="#cardinality-baselines">baseline deltas</a> and <a href="#cardinality-cost">cost estimates</a>.</li>
+      </ul>
+
+      <h3 id="cardinality-bytes">Byte estimates</h3>
+      <p>Bytes are computed from the decoded records in two size models: uncompressed <strong>OTLP protobuf</strong> and <strong>OTLP JSON</strong>, including resource and scope overhead. Bytes are also attributed to each attribute key, which gives the <strong>Bytes share</strong> column: how much of a signal's volume a key accounts for. Fields the extension doesn't keep (start times, exemplars, dropped counts) are not counted, so real payloads are somewhat larger.</p>
+
+      <h3 id="cardinality-growth">Rates and growth</h3>
+      <ul>
+        <li>Rates use the last 15 minutes of data (or less, if less was received) and are projected to a day and a 30-day month.</li>
+        <li>Counts are kept in 60 one-minute buckets (wider for loaded files, to cover the whole file). A key is <strong>↗ growing</strong> when the new unique values in the last third of its history arrive at least half as fast as in the first third, and <strong>→ saturated</strong> otherwise. With fewer than 4 buckets of history it shows <strong>… too little data</strong>.</li>
+      </ul>
+
+      <h3 id="cardinality-baselines">Baseline deltas</h3>
+      <ul>
+        <li>Every <a href="#baselines">baseline</a> now includes a cardinality summary per service: counts, bytes, rates and up to 200 attribute keys and 200 metrics with their unique values, value class and driving label. It holds names and counts only, never values or examples.</li>
+        <li>The <strong>Baseline</strong> tab compares the active baseline with current data: <strong>new</strong> findings, <strong>grown</strong> ones (unique values at least doubled and up by <code>minDistinct</code>), <strong>resolved</strong> ones, per-service volume changes of 25% or more, and services that appeared or disappeared.</li>
+        <li><strong>Copy comparison report</strong> adds a Cardinality section to the Markdown report when both sides have a summary.</li>
+        <li>The summary covers everything counted up to capture time, not the service map's time window.</li>
+      </ul>
+
+      <h3 id="cardinality-badges">Badges and status bar</h3>
+      <ul>
+        <li>Services and instances with warning or critical findings show a count badge in the Instances view (red when any is critical), with the top findings in the tooltip. The view shows how many services are noisy.</li>
+        <li>The status bar shows a flame icon with the number of noisy <strong>live</strong> services; click it to open the analyzer.</li>
+        <li>Badges update at most every 2 seconds, and only after new data arrives.</li>
+        <li>Turning off <code>otel.cardinality.enabled</code> frees all counters and hides the badges, the status bar item and the analyzer's menu entries. Turning it back on counts from that moment.</li>
+      </ul>
+
+      <h3 id="cardinality-cost">Cost estimates</h3>
+      <p>The analyzer prices <strong>only what you enter</strong>. No vendor prices are built in, and with no prices set it shows volume only. Per-day figures below are the observed rates multiplied by the traffic multiplier.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Input</th><th scope="col">Monthly cost</th></tr></thead>
+          <tbody>
+            <tr><td>Per GB ingested</td><td>GB per day × 30 × price. 1 GB = 10<sup>9</sup> bytes, in the chosen size model.</td></tr>
+            <tr><td>Per million spans</td><td>Spans per day × 30 ÷ 1,000,000 × price.</td></tr>
+            <tr><td>Per million log records</td><td>Logs per day × 30 ÷ 1,000,000 × price.</td></tr>
+            <tr><td>Per active series per month</td><td>Unique metric series since counting started × price.</td></tr>
+            <tr><td>Per GB-month retained + retention days</td><td>GB per day × retention days × price. Needs both values; without retention days it is left out and the assumptions say so.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><strong>Size model:</strong> <code>protobuf</code> (default) or <code>json</code>, whichever payload your backend bills by.</li>
+        <li><strong>Traffic multiplier:</strong> production volume ÷ local volume, e.g. <code>500</code> if production handles 500 times the traffic you sent locally. It scales spans, logs and bytes, not metric series (series depend on label values, not on traffic).</li>
+        <li><strong>Currency:</strong> an ISO 4217 code such as <code>USD</code> or <code>EUR</code>, for display only.</li>
+        <li><strong>Where prices come from:</strong> the <code>otel.cost.*</code> settings are the defaults (user, workspace or folder settings). The <strong>Pricing</strong> tab's <strong>Calculate</strong> shows an estimate for the values in the form without saving them, and <strong>Save for this workspace</strong> keeps them as overrides for this workspace; overrides are kept in VS Code's workspace state, not in a file. <strong>Reset to settings</strong> removes them, and <strong>Open settings</strong> jumps to <code>otel.cost.*</code>. The tab shows which source is in use.</li>
+      </ul>
+      <div class="callout">
+        <p><strong>Estimates only.</strong> Rates come from a few minutes of local traffic. Real bills also depend on compression, sampling, indexing and per-request fees, free tiers and commitments, none of which are modelled. Every figure is labelled an estimate, and the Pricing tab lists the assumptions behind it. See <a href="troubleshooting.html#cardinality-cost">why the estimate may differ from your bill</a>.</p>
+      </div>
 
       <h2 id="sessions">Sessions, import &amp; export</h2>
       <ul>
@@ -187,7 +288,7 @@
       <p>Spans and logs with source-location attributes (<code>code.filepath</code> / <code>code.lineno</code>, or the newer <code>code.file.path</code> / <code>code.line.number</code>) get a <strong>Navigate To Code</strong> action. Paths are resolved inside your workspace folders; when only a file name matches, the closest path wins (or you pick from a list). An absolute path outside the workspace asks for confirmation before it opens.</p>
 
       <h2 id="ai">Ask Copilot <span class="badge">opt-in</span></h2>
-      <p>The <code>@otel</code> chat participant and ten <code>otel_*</code> tools answer questions about your traces, logs, metrics, AI-agent runs and service map baselines, with buttons back to the data. See <a href="ai.html">Ask Copilot</a>.</p>
+      <p>The <code>@otel</code> chat participant and eleven <code>otel_*</code> tools answer questions about your traces, logs, metrics, AI-agent runs, service map baselines and telemetry cost, with buttons back to the data. See <a href="ai.html">Ask Copilot</a>.</p>
 
       <nav class="page-nav" aria-label="Pagination">
         <a href="getting-started.html"><small>Previous</small>← Getting started</a>

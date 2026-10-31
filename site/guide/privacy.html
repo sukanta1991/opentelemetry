@@ -75,6 +75,9 @@
         <li>Live telemetry is held in memory only. It is capped by the <code>otel.retention.*</code> settings and dropped when the receiver restarts or you run <strong>Clear Collected Data</strong>.</li>
         <li>Telemetry is never written to disk unless you export it yourself.</li>
         <li><strong>Saved baselines</strong> are written to the extension's local storage for the workspace (global storage when no folder is open) on this machine. They hold aggregates only: service, dependency, route and operation names, call counts, error counts, sampled latencies and up to 2 example trace IDs per item, but no attributes, log bodies or span payloads. Unsaved baselines stay in memory. <strong>Export Baseline…</strong> warns that the file contains names and trace IDs before writing it.</li>
+        <li><strong>Cardinality counters</strong> keep hashes of attribute values (never the values themselves), counts, byte sizes, log patterns and up to 3 example values per key. Examples and patterns are redacted with the same rules as the <a href="#redaction">AI features</a> and cut to 120 characters. Everything stays in memory with fixed limits, and turning off <code>otel.cardinality.enabled</code> frees it.</li>
+        <li>Baselines also store a <strong>cardinality summary</strong>: attribute keys, metric names, counts, byte sizes and value classes (such as “UUID”), but no values or examples.</li>
+        <li><strong>Prices</strong> you save in the Cardinality &amp; Cost panel are kept in this workspace's VS Code state, not in a file.</li>
       </ul>
 
       <h2 id="ai">AI features (optional)</h2>
@@ -94,8 +97,8 @@ the chat model you selected in VS Code ──▶ answer shown in chat</code></pr
         <table>
           <thead><tr><th scope="col">The <code>otel_*</code> tools can</th><th scope="col">The <code>otel_*</code> tools cannot</th></tr></thead>
           <tbody>
-            <tr><td class="yes">Read the telemetry the receiver holds in memory, and your service map baselines</td><td>Read, create or edit workspace files</td></tr>
-            <tr><td class="yes">Read the <code>otel.ai.*</code> settings</td><td>Run commands, tasks or terminals</td></tr>
+            <tr><td class="yes">Read the telemetry the receiver holds in memory, the cardinality counters, and your service map baselines</td><td>Read, create or edit workspace files</td></tr>
+            <tr><td class="yes">Read the <code>otel.ai.*</code>, <code>otel.cardinality.*</code> and <code>otel.cost.*</code> settings and the prices saved in the Cardinality &amp; Cost panel</td><td>Run commands, tasks or terminals</td></tr>
             <tr><td></td><td>Read environment variables</td></tr>
             <tr><td></td><td>Make network requests</td></tr>
             <tr><td></td><td>Change or delete telemetry</td></tr>

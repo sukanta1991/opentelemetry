@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { Application, ImportedSessionView, Instance } from '../store/store';
+import { Application, ImportedSessionView, Instance, LIVE_REALM } from '../store/store';
+import { cardinalityUri } from './cardinalityDecorations';
+import { CardinalityEvaluator, instanceKey, serviceKey, tooltipMarkdown } from './cardinalityEvaluator';
 import { diffDescriptions, instanceDescription, instanceLabel, serviceDescription, treeShape } from './instancesTreeModel';
+import { PanelScope } from './webview/cardinalityView';
 
 // Full refreshes clear VS Code's handle map, so under load they must be rare.
 const TREE_REFRESH_MS = 1000;
@@ -40,6 +43,15 @@ export class ImportedServiceNode {
 
 type Node = AppNode | InstanceNode | ImportedRootNode | ImportedSessionNode | ImportedServiceNode;
 
+/** The cardinality panel scope for a tree node, or undefined for nodes without one. */
+export function cardinalityScopeOf(node: unknown): PanelScope | undefined {
+  if (node instanceof AppNode) return { realm: LIVE_REALM, service: node.app.name };
+  if (node instanceof InstanceNode) return { realm: node.instance.realm, service: node.instance.serviceName, instanceId: node.instance.id };
+  if (node instanceof ImportedServiceNode) return { realm: node.sessionId, service: node.name };
+  if (node instanceof ImportedSessionNode) return { realm: node.view.session.id };
+  return undefined;
+}
+
 export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<Node | Node[] | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
@@ -57,11 +69,38 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
   private pendingFull = false;
   private readonly disposables: { dispose(): void }[] = [];
 
-  constructor(private readonly controller: OtelController) {
+  constructor(
+    private readonly controller: OtelController,
+    private readonly cardinality?: CardinalityEvaluator
+  ) {
     this.disposables.push(
       controller.store.onDidChange(() => this.scheduleRefresh(false)),
       controller.onDidChangeState(() => this.scheduleRefresh(true))
     );
+    if (cardinality) this.disposables.push(cardinality.onDidChange((_, changed) => this.refreshKeys(changed)));
+  }
+
+  // Tooltips list findings, so items whose findings changed are fetched again.
+  private refreshKeys(changed: string[]): void {
+    const keys = new Set(changed);
+    const nodes: Node[] = [];
+    for (const [name, n] of this.appNodes) if (keys.has(serviceKey(LIVE_REALM, name))) nodes.push(n);
+    for (const n of this.serviceNodes.values()) if (keys.has(serviceKey(n.sessionId, n.name))) nodes.push(n);
+    for (const [id, n] of this.instanceNodes) if (keys.has(instanceKey(id))) nodes.push(n);
+    if (nodes.length) this.emitter.fire(nodes);
+  }
+
+  // Lets the decoration provider badge the item and appends its findings to the tooltip.
+  private withCardinality(item: vscode.TreeItem, key: string): vscode.TreeItem {
+    if (!this.cardinality) return item;
+    item.resourceUri = cardinalityUri(key);
+    const node = this.cardinality.current.nodes.get(key);
+    if (!node) return item;
+    const section = tooltipMarkdown(node);
+    const prev = item.tooltip;
+    const base = prev instanceof vscode.MarkdownString ? prev.value : (prev ?? '');
+    item.tooltip = new vscode.MarkdownString(base ? `${base}\n\n${section}` : section);
+    return item;
   }
 
   refresh(): void {
@@ -159,7 +198,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       item.contextValue = 'otelImportedService';
       item.id = `session::${node.sessionId}::service::${node.name}`;
       item.description = serviceDescription(node.instances);
-      return item;
+      return this.withCardinality(item, serviceKey(node.sessionId, node.name));
     }
     if (node.kind === 'app') {
       const item = new vscode.TreeItem(
@@ -172,7 +211,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       item.description = `${node.app.instances.length} instance${
         node.app.instances.length === 1 ? '' : 's'
       }`;
-      return item;
+      return this.withCardinality(item, serviceKey(LIVE_REALM, node.app.name));
     }
     const inst = node.instance;
     if (inst.kind === 'imported') {
@@ -197,7 +236,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
           ? { command: 'otel.openTraces', title: 'Open Traces' }
           : { command: 'otel.openMetrics', title: 'Open Metrics' };
       item.command = { ...open, arguments: [node] };
-      return item;
+      return this.withCardinality(item, instanceKey(inst.id));
     }
     const item = new vscode.TreeItem(instanceLabel(inst), vscode.TreeItemCollapsibleState.None);
     item.iconPath = new vscode.ThemeIcon('vm');
@@ -215,7 +254,7 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
       title: 'Open Logs',
       arguments: [node],
     };
-    return item;
+    return this.withCardinality(item, instanceKey(inst.id));
   }
 
   getChildren(node?: Node): Node[] {

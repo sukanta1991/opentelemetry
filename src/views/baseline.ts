@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Baseline snapshots: frozen per-node, per-edge and per-operation call stats for later comparison. No vscode import.
 
+import { CardinalitySummary } from './cardinalitySummary';
 import { NodeType } from './serviceGraph';
 import { CallAcc, ScopeAcc, TaggedSpan, collectCalls, prepare, sortedDurations } from './serviceMapModel';
 import { quantileSorted } from './webview/stats';
@@ -43,6 +44,8 @@ export interface Snapshot {
   entries: SnapshotEntry[];
   // Some node or edge entries were dropped by the key cap.
   truncated: boolean;
+  // Usage counters of the realm up to capture time (not limited to the window); absent when counting was off.
+  cardinality?: CardinalitySummary;
 }
 
 export interface SnapshotCaps {

@@ -5,8 +5,8 @@ import { registerAiTools } from './ai/tools';
 import { OtelController } from './controller';
 import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
-import { readSettings } from './settings';
-import { BaselineStatus } from './status';
+import { readCardinalitySettings, readSettings } from './settings';
+import { BaselineStatus, CardinalityStatus } from './status';
 import { normalizeTraceId } from './store/ids';
 import { LIVE_REALM } from './store/store';
 import { createBaselineRegistry } from './views/baselineIo';
@@ -27,7 +27,10 @@ import {
   switchBaseline,
 } from './views/baselineActions';
 import { openCodeLocation } from './views/codeNav';
-import { ImportedSessionNode, InstanceNode, InstancesTreeProvider } from './views/instancesTree';
+import { CardinalityDecorations } from './views/cardinalityDecorations';
+import { CardinalityEvaluator } from './views/cardinalityEvaluator';
+import { CardinalityPanel } from './views/cardinalityPanel';
+import { ImportedSessionNode, InstanceNode, InstancesTreeProvider, cardinalityScopeOf } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
@@ -45,10 +48,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   void controller.resetRunningContext();
   context.subscriptions.push({ dispose: () => controller.dispose() });
 
-  const tree = new InstancesTreeProvider(controller);
+  // Idle until data arrives: evaluates at most every 2 s after a change, never while the analyzer is off.
+  const cardinality = new CardinalityEvaluator(controller.store, readCardinalitySettings);
+  const cardinalityDecorations = new CardinalityDecorations(cardinality);
+  const cardinalityStatus = new CardinalityStatus();
+  const tree = new InstancesTreeProvider(controller, cardinality);
+  const treeView = vscode.window.createTreeView('otel.instances', { treeDataProvider: tree });
   context.subscriptions.push(
+    cardinality,
+    cardinalityDecorations,
+    cardinalityStatus,
+    vscode.window.registerFileDecorationProvider(cardinalityDecorations),
     tree,
-    vscode.window.createTreeView('otel.instances', { treeDataProvider: tree })
+    treeView,
+    cardinality.onDidChange((overview) => {
+      const n = overview.noisyServices;
+      treeView.badge = n ? { value: n, tooltip: `${n} service${n === 1 ? '' : 's'} with high-cardinality findings` } : undefined;
+      cardinalityStatus.update(overview.live);
+    })
   );
 
   // Reads only workspace state here; baseline bodies load on first use.
@@ -84,6 +101,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('otel.baseline.import', () => importBaseline(baselineDeps)),
     vscode.commands.registerCommand('otel.baseline.copyReport', () => copyBaselineReport(baselineDeps)),
     vscode.commands.registerCommand('otel.baseline.deactivate', () => baselines.setActive(undefined))
+  );
+
+  const cardinalityDeps = { workspaceState: context.workspaceState, registry: baselines };
+  context.subscriptions.push(
+    vscode.commands.registerCommand('otel.openCardinality', () => CardinalityPanel.show(controller, cardinalityDeps)),
+    vscode.commands.registerCommand('otel.analyzeCardinality', (arg: unknown) =>
+      CardinalityPanel.show(controller, cardinalityDeps, cardinalityScopeOf(arg))
+    )
   );
 
   const resolveInstanceId = async (arg: unknown): Promise<string | undefined> => {
@@ -204,6 +229,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('otel.retention')) controller.reloadRetention();
+      if (e.affectsConfiguration('otel.cardinality.enabled')) controller.reloadCardinality();
+      if (e.affectsConfiguration('otel.cardinality')) cardinality.invalidate();
     })
   );
 
