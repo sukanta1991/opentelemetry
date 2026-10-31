@@ -15,6 +15,7 @@ const outputChannels: string[] = [];
 let statusText = '';
 let treeViewId = '';
 let debugProviderType = '';
+const decorationProviders: unknown[] = [];
 
 class EventEmitter<T> {
   private listeners: ((e: T) => any)[] = [];
@@ -87,6 +88,10 @@ const fakeVscode: any = {
     }),
     createTreeView: (id: string) => {
       treeViewId = id;
+      return { dispose() {} };
+    },
+    registerFileDecorationProvider: (provider: unknown) => {
+      decorationProviders.push(provider);
       return { dispose() {} };
     },
     createWebviewPanel: () => ({
@@ -194,6 +199,8 @@ async function main() {
     'otel._revealTrace',
     'otel._revealLogs',
     'otel._openSource',
+    'otel.openCardinality',
+    'otel.analyzeCardinality',
   ]) {
     assert.ok(registeredCommands.has(cmd), `command registered: ${cmd}`);
   }
@@ -213,7 +220,7 @@ async function main() {
     pkg.contributes.languageModelTools.map((t: any) => t.name),
     'all contributed tools registered'
   );
-  assert.strictEqual(registeredTools.length, 10);
+  assert.strictEqual(registeredTools.length, 11);
   assert.deepStrictEqual(participants, ['otel.chat'], 'chat participant registered');
   assert.deepStrictEqual(outputChannels, ['OpenTelemetry AI'], 'AI output channel created once');
   // Invalid _openSource arguments are ignored without opening anything.
@@ -221,6 +228,8 @@ async function main() {
   await registeredCommands.get('otel._openSource')!(undefined);
 
   assert.strictEqual(treeViewId, 'otel.instances', 'tree view created');
+  assert.strictEqual(decorationProviders.length, 1, 'cardinality decorations registered');
+  assert.ok(!statusText.includes('$(flame)'), 'no cardinality evaluation at activation');
   assert.strictEqual(debugProviderType, '*', 'debug provider registered');
 
   // launchOnStartup => receiver started => setContext otel.running true

@@ -10,6 +10,7 @@ import { Redactor } from '../redact';
 import { Ref } from '../refs';
 import { safeValue, setOwn, truncateString } from '../serialize';
 import type { BaselineLookup } from './baseline';
+import type { CardinalityInputs } from './cardinality';
 
 export interface AnalysisContext {
   now: number;
@@ -17,6 +18,7 @@ export interface AnalysisContext {
   maxItems: number;
   receiverRunning?: boolean;
   baselines?: BaselineLookup;
+  cardinality?: CardinalityInputs;
 }
 
 export interface AnalysisOutput {

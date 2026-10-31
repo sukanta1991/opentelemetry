@@ -20,6 +20,8 @@ import {
 } from './model';
 import { RingBuffer } from './ringBuffer';
 import { byCodeUnit } from '../compare';
+import { CardinalityBudget } from './cardinality/budget';
+import { UsageTracker, bucketMsForRange } from './cardinality/tracker';
 
 // Time-ordered history for one metric series (a metric name + attribute set + field).
 export interface MetricSeries {
@@ -51,6 +53,8 @@ export interface Instance {
   peer?: string;
   logCount: number;
   spanCount: number;
+  // Ingest-time usage counters; undefined while the cardinality analyzer is off.
+  usage?: UsageTracker;
 }
 
 // A window of logs newer than a caller-held cursor, plus the current eviction watermark.
@@ -119,6 +123,25 @@ export function attrsKey(attrs: KeyValueMap): string {
   return JSON.stringify(Object.keys(attrs).sort(byCodeUnit).map((k) => [k, attrs[k]]));
 }
 
+// Earliest and latest valid record time of an import, for sizing its usage time buckets.
+function timeRange(
+  traces: readonly ResourceSpans[],
+  logs: readonly { logs: readonly LogRecord[] }[],
+  metrics: readonly ResourceMetrics[]
+): [number, number] {
+  let min = Infinity;
+  let max = -Infinity;
+  const see = (t: number | undefined): void => {
+    if (t === undefined || !(t > 0) || !Number.isFinite(t)) return;
+    if (t < min) min = t;
+    if (t > max) max = t;
+  };
+  for (const b of traces) for (const s of b.spans) see(s.startMs);
+  for (const b of logs) for (const l of b.logs) see(l.timeMs || l.observedTimeMs);
+  for (const b of metrics) for (const m of b.metrics) for (const dp of m.dataPoints) see(dp.timeMs);
+  return [min, max];
+}
+
 export class TelemetryStore {
   private instances = new Map<string, Instance>();
   private sessions = new Map<string, ImportedSession>();
@@ -129,6 +152,8 @@ export class TelemetryStore {
   private maxMetricPoints: number;
   private maxMetricSeries: number;
   private importCounter = 0;
+  private cardinalityEnabled = true;
+  private readonly cardinalityBudget = new CardinalityBudget();
 
   constructor(maxLogs = 5000, maxTraces = 2000, maxMetricPoints = 500, maxMetricSeries = 200) {
     this.maxLogs = maxLogs;
@@ -168,6 +193,34 @@ export class TelemetryStore {
         series.points.setCapacity(this.maxMetricPoints);
       }
     }
+  }
+
+  /** Turns ingest-time usage tracking on (from the next record) or off (dropping all counters). */
+  setCardinality(enabled: boolean): void {
+    if (enabled === this.cardinalityEnabled) return;
+    this.cardinalityEnabled = enabled;
+    if (enabled) return;
+    for (const inst of this.instances.values()) this.dropUsage(inst);
+    this.scheduleFire();
+  }
+
+  isCardinalityEnabled(): boolean {
+    return this.cardinalityEnabled;
+  }
+
+  private usageOf(inst: Instance): UsageTracker | undefined {
+    if (!this.cardinalityEnabled) return undefined;
+    return (inst.usage ??= new UsageTracker({ budget: this.cardinalityBudget }));
+  }
+
+  private importedUsage(session: ImportedSession, bucketMs: number): UsageTracker | undefined {
+    if (!this.cardinalityEnabled) return undefined;
+    return new UsageTracker({ budget: this.cardinalityBudget, bucketMs, live: false, clock: () => session.loadedAt });
+  }
+
+  private dropUsage(inst: Instance): void {
+    inst.usage?.dispose();
+    inst.usage = undefined;
   }
 
   getApplications(): Application[] {
@@ -257,6 +310,7 @@ export class TelemetryStore {
     const inst = this.instances.get(id);
     if (!inst) return;
     this.instances.delete(id);
+    this.dropUsage(inst);
     if (inst.kind === 'imported' && !this.realmInstances(inst.realm).length) {
       this.sessions.delete(inst.realm);
     }
@@ -265,7 +319,10 @@ export class TelemetryStore {
 
   removeSession(id: string): void {
     if (!this.sessions.delete(id)) return;
-    for (const inst of this.realmInstances(id)) this.instances.delete(inst.id);
+    for (const inst of this.realmInstances(id)) {
+      this.instances.delete(inst.id);
+      this.dropUsage(inst);
+    }
     this.scheduleFire();
   }
 
@@ -274,6 +331,7 @@ export class TelemetryStore {
     for (const [id, inst] of this.instances) {
       if (inst.kind === 'imported') continue;
       this.instances.delete(id);
+      this.dropUsage(inst);
       changed = true;
     }
     if (changed) this.scheduleFire();
@@ -331,6 +389,7 @@ export class TelemetryStore {
     for (const b of batches) {
       const inst = this.upsertInstance(b.resource, peer);
       if (inst.kind === 'imported') continue;
+      this.usageOf(inst)?.addLogs(b.resource, b.logs);
       for (const log of b.logs) {
         inst.logs.push(this.withSeq(inst, log));
         inst.logCount++;
@@ -392,6 +451,9 @@ export class TelemetryStore {
   importLogs(opts: ImportLogsOptions): string {
     const session = this.newSession(opts.sourceLabel);
     const inst = this.newImportedInstance(session, session.id, opts.serviceName, undefined, opts.resourceAttrs);
+    const [min, max] = timeRange([], [{ logs: opts.logs }], []);
+    inst.usage = this.importedUsage(session, bucketMsForRange(min, max));
+    inst.usage?.addLogs({ serviceName: opts.serviceName, attrs: opts.resourceAttrs }, opts.logs);
     for (const log of opts.logs) {
       inst.logs.push(this.withSeq(inst, log));
       inst.logCount++;
@@ -404,6 +466,8 @@ export class TelemetryStore {
   /** Loads traces, logs and metrics from one file into a new realm, one instance per resource. */
   importSession(opts: ImportSessionOptions): { sessionId: string; instanceIds: string[] } {
     const session = this.newSession(opts.sourceLabel);
+    const [min, max] = timeRange(opts.traces, opts.logs, opts.metrics);
+    const bucketMs = bucketMsForRange(min, max);
     const byResource = new Map<string, Instance>();
     const instanceFor = (resource: ResourceInfo): Instance => {
       const key = this.instanceId(resource);
@@ -416,6 +480,7 @@ export class TelemetryStore {
           resource.serviceInstanceId,
           resource.attrs
         );
+        inst.usage = this.importedUsage(session, bucketMs);
         byResource.set(key, inst);
       }
       return inst;
@@ -423,6 +488,7 @@ export class TelemetryStore {
 
     for (const b of opts.traces) {
       const inst = instanceFor(b.resource);
+      inst.usage?.addSpans(b.resource, b.spans);
       for (const span of b.spans) {
         if (!span.traceId || !span.spanId) continue;
         this.addSpan(inst, span);
@@ -431,6 +497,7 @@ export class TelemetryStore {
     }
     for (const b of opts.logs) {
       const inst = instanceFor(b.resource);
+      inst.usage?.addLogs(b.resource, b.logs);
       for (const log of b.logs) {
         inst.logs.push(this.withSeq(inst, log));
         inst.logCount++;
@@ -441,6 +508,8 @@ export class TelemetryStore {
     const metrics = new Map<Instance, Map<string, Metric>>();
     for (const b of opts.metrics) {
       const inst = instanceFor(b.resource);
+      // Each batch is one export; count it before batches are merged.
+      inst.usage?.addMetrics(b.resource, b.metrics);
       let byName = metrics.get(inst);
       if (!byName) metrics.set(inst, (byName = new Map()));
       for (const m of b.metrics) {
@@ -470,6 +539,7 @@ export class TelemetryStore {
     let changed = false;
     for (const b of batches) {
       const inst = this.upsertInstance(b.resource, peer);
+      this.usageOf(inst)?.addSpans(b.resource, b.spans);
       for (const span of b.spans) {
         if (!span.traceId || !span.spanId) continue;
         this.addSpan(inst, span);
@@ -523,6 +593,7 @@ export class TelemetryStore {
     let changed = false;
     for (const b of batches) {
       const inst = this.upsertInstance(b.resource, peer);
+      this.usageOf(inst)?.addMetrics(b.resource, b.metrics);
       for (const metric of b.metrics) {
         const existing = inst.metrics.get(metric.name);
         if (existing) {

@@ -95,6 +95,16 @@ export interface CompareBaselineInput {
   limit: number;
 }
 
+export const CARDINALITY_SIGNALS = ['all', 'spans', 'logs', 'metrics'] as const;
+
+export interface AnalyzeCardinalityInput {
+  service?: string;
+  instanceId?: string;
+  session?: string;
+  signal: (typeof CARDINALITY_SIGNALS)[number];
+  limit: number;
+}
+
 class InputError extends Error {}
 
 type Raw = Record<string, unknown>;
@@ -246,6 +256,16 @@ export function parseCompareBaselineInput(raw: unknown, maxItems: number): Parse
     against: optString(r, 'against'),
     session: optString(r, 'session'),
     scope: optEnum(r, 'scope', BASELINE_SCOPES) ?? 'all',
+    limit: limit(r, maxItems),
+  }));
+}
+
+export function parseAnalyzeCardinalityInput(raw: unknown, maxItems: number): Parsed<AnalyzeCardinalityInput> {
+  return parse(raw, (r) => ({
+    service: optString(r, 'service'),
+    instanceId: optString(r, 'instanceId'),
+    session: optString(r, 'session'),
+    signal: optEnum(r, 'signal', CARDINALITY_SIGNALS) ?? 'all',
     limit: limit(r, maxItems),
   }));
 }

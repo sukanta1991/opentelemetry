@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // Baseline file format: serialize and strictly validate. Files may come from other machines, so nothing is trusted.
 
+import { Signal, Volume } from '../store/cardinality/sizes';
+import { VALUE_CLASSES, ValueClass } from '../store/cardinality/valueClass';
 import { DEFAULT_SNAPSHOT_CAPS, Snapshot, SnapshotEntry, SnapshotNode, SnapshotSource, SnapshotSourceKind } from './baseline';
+import { CardinalitySummary, SUMMARY_LIMITS, ServiceSummary, SummaryKey, SummaryMetric, SummaryScope } from './cardinalitySummary';
 import { NodeType } from './serviceGraph';
 import { MAX_OPERATION_KEY_LENGTH } from './serviceMapModel';
 
 export const BASELINE_FORMAT = 'otel-baseline';
-export const BASELINE_VERSION = 1;
+// 2 adds the optional snapshot.cardinality summary; 1 is still read.
+export const BASELINE_VERSION = 2;
+const READABLE_VERSIONS: ReadonlySet<unknown> = new Set([1, 2]);
 export const BASELINE_EXTENSION = 'otel-baseline.json';
 export const MAX_BASELINE_FILE_BYTES = 8 * 1024 * 1024;
 export const MAX_BASELINE_NAME_LENGTH = 80;
@@ -16,6 +21,8 @@ const MAX_NODES = DEFAULT_SNAPSHOT_CAPS.keys * 2;
 const TRACE_ID = /^[0-9a-f]{32}$/;
 const SOURCE_KINDS: ReadonlySet<SnapshotSourceKind> = new Set(['window', 'mark', 'time', 'session', 'file']);
 const NODE_TYPES: ReadonlySet<NodeType> = new Set(['service', 'database', 'queue', 'external']);
+const SUMMARY_SCOPES: ReadonlySet<SummaryScope> = new Set(['span', 'span.event', 'log']);
+const CLASSES: ReadonlySet<ValueClass> = new Set(VALUE_CLASSES);
 
 export class BaselineFileError extends Error {}
 
@@ -33,13 +40,13 @@ export function sanitizeBaselineName(raw: unknown, fallback = 'Baseline'): strin
 }
 
 export function serializeBaseline(b: BaselineFile): string {
-  const { source, nodes, entries, truncated } = b.snapshot;
+  const { source, nodes, entries, truncated, cardinality } = b.snapshot;
   return JSON.stringify({
     format: BASELINE_FORMAT,
     version: BASELINE_VERSION,
     name: b.name,
     createdMs: b.createdMs,
-    snapshot: { source, nodes, entries, truncated },
+    snapshot: cardinality ? { source, nodes, entries, truncated, cardinality } : { source, nodes, entries, truncated },
   });
 }
 
@@ -69,6 +76,104 @@ function int(v: unknown, what: string): number {
 }
 
 const numOrNull = (v: unknown, what: string) => (v === null ? null : num(v, what));
+
+// Attribute keys and metric names may legitimately be empty strings.
+function name(v: unknown, max: number, what: string): string {
+  return typeof v === 'string' && v.length <= max ? v : fail(`${what} must be text of at most ${max} characters.`);
+}
+
+function bool(v: unknown, what: string): boolean {
+  return typeof v === 'boolean' ? v : fail(`${what} must be true or false.`);
+}
+
+function parseVolumes(v: unknown, what: string, whole: boolean): Record<Signal, Volume> {
+  const o = obj(v, what);
+  const read = whole ? int : num;
+  const one = (s: Signal): Volume => {
+    const x = obj(o[s], `${what}.${s}`);
+    return { count: read(x.count, `${what}.${s}.count`), proto: read(x.proto, `${what}.${s}.proto`), json: read(x.json, `${what}.${s}.json`) };
+  };
+  return { traces: one('traces'), logs: one('logs'), metrics: one('metrics') };
+}
+
+function parseSummaryKey(v: unknown, at: string): SummaryKey {
+  const k = obj(v, at);
+  const scope = k.scope as SummaryScope;
+  if (!SUMMARY_SCOPES.has(scope)) fail(`${at}.scope is not recognised.`);
+  const key: SummaryKey = {
+    scope,
+    key: name(k.key, SUMMARY_LIMITS.keyName, `${at}.key`),
+    distinct: int(k.distinct, `${at}.distinct`),
+    approx: bool(k.approx, `${at}.approx`),
+    occurrences: int(k.occurrences, `${at}.occurrences`),
+    proto: int(k.proto, `${at}.proto`),
+  };
+  if (k.cls !== undefined) {
+    if (!CLASSES.has(k.cls as ValueClass)) fail(`${at}.cls is not recognised.`);
+    key.cls = k.cls as ValueClass;
+  }
+  return key;
+}
+
+function parseSummaryMetric(v: unknown, at: string): SummaryMetric {
+  const m = obj(v, at);
+  const metric: SummaryMetric = {
+    name: name(m.name, SUMMARY_LIMITS.keyName, `${at}.name`),
+    series: int(m.series, `${at}.series`),
+    approx: bool(m.approx, `${at}.approx`),
+    points: int(m.points, `${at}.points`),
+  };
+  if (m.driver !== undefined) metric.driver = name(m.driver, SUMMARY_LIMITS.keyName, `${at}.driver`);
+  return metric;
+}
+
+function unique<T>(items: readonly T[], id: (x: T) => string, what: string): void {
+  const seen = new Set<string>();
+  for (const x of items) {
+    const k = id(x);
+    if (seen.has(k)) fail(`${what} lists ${JSON.stringify(k.slice(0, 80))} twice.`);
+    seen.add(k);
+  }
+}
+
+function parseServiceSummary(v: unknown, i: number): ServiceSummary {
+  const at = `cardinality.services[${i}]`;
+  const s = obj(v, at);
+  const keys = arr(s.keys, SUMMARY_LIMITS.keysPerService, `${at}.keys`).map((k, j) => parseSummaryKey(k, `${at}.keys[${j}]`));
+  unique(keys, (k) => `${k.scope} ${k.key}`, `${at}.keys`);
+  const metrics = arr(s.metrics, SUMMARY_LIMITS.metricsPerService, `${at}.metrics`).map((m, j) => parseSummaryMetric(m, `${at}.metrics[${j}]`));
+  unique(metrics, (m) => m.name, `${at}.metrics`);
+  return {
+    service: name(s.service, SUMMARY_LIMITS.serviceName, `${at}.service`),
+    totals: parseVolumes(s.totals, `${at}.totals`, true),
+    perMinute: parseVolumes(s.perMinute, `${at}.perMinute`, false),
+    observedMs: num(s.observedMs, `${at}.observedMs`),
+    spanNames: int(s.spanNames, `${at}.spanNames`),
+    templates: int(s.templates, `${at}.templates`),
+    keys,
+    keysTruncated: bool(s.keysTruncated, `${at}.keysTruncated`),
+    metrics,
+    metricsTruncated: bool(s.metricsTruncated, `${at}.metricsTruncated`),
+  };
+}
+
+function parseCardinality(v: unknown): CardinalitySummary {
+  const c = obj(v, 'cardinality');
+  const services = arr(c.services, SUMMARY_LIMITS.services, 'cardinality.services').map((s, i) => parseServiceSummary(s, i));
+  unique(services, (s) => s.service, 'cardinality.services');
+  let keys = 0;
+  let metrics = 0;
+  for (const s of services) {
+    keys += s.keys.length;
+    metrics += s.metrics.length;
+  }
+  if (keys > SUMMARY_LIMITS.keysTotal) fail(`cardinality has more than ${SUMMARY_LIMITS.keysTotal} keys.`);
+  if (metrics > SUMMARY_LIMITS.metricsTotal) fail(`cardinality has more than ${SUMMARY_LIMITS.metricsTotal} metrics.`);
+  const fromMs = num(c.fromMs, 'cardinality.fromMs');
+  const toMs = num(c.toMs, 'cardinality.toMs');
+  if (toMs < fromMs) fail('cardinality.toMs is before cardinality.fromMs.');
+  return { fromMs, toMs, windowMinutes: num(c.windowMinutes, 'cardinality.windowMinutes'), services, truncated: bool(c.truncated, 'cardinality.truncated') };
+}
 
 function parseSource(v: unknown): SnapshotSource {
   const s = obj(v, 'snapshot.source');
@@ -135,7 +240,7 @@ export function parseBaselineFile(text: string): BaselineFile {
   }
   const root = obj(raw, 'File');
   if (root.format !== BASELINE_FORMAT) fail('Not an OpenTelemetry baseline file.');
-  if (root.version !== BASELINE_VERSION) {
+  if (!READABLE_VERSIONS.has(root.version)) {
     fail(typeof root.version === 'number' && root.version > BASELINE_VERSION ? 'File was made by a newer version of the extension.' : 'Unsupported baseline file version.');
   }
   const snap = obj(root.snapshot, 'snapshot');
@@ -156,9 +261,12 @@ export function parseBaselineFile(text: string): BaselineFile {
   }
   if (samples > DEFAULT_SNAPSHOT_CAPS.totalSamples) fail(`File has more than ${DEFAULT_SNAPSHOT_CAPS.totalSamples} samples.`);
   if (typeof snap.truncated !== 'boolean') fail('snapshot.truncated must be true or false.');
+  const snapshot: Snapshot = { source: parseSource(snap.source), nodes, entries, truncated: snap.truncated as boolean };
+  // Version 1 files predate the summary, so the field is ignored there like any unknown field.
+  if (root.version !== 1 && snap.cardinality !== undefined) snapshot.cardinality = parseCardinality(snap.cardinality);
   return {
     name: sanitizeBaselineName(root.name),
     createdMs: num(root.createdMs, 'createdMs'),
-    snapshot: { source: parseSource(snap.source), nodes, entries, truncated: snap.truncated as boolean },
+    snapshot,
   };
 }

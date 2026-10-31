@@ -98,6 +98,8 @@
             <tr><td><code>OpenTelemetry: Export Baseline…</code> / <code>Import Baseline…</code></td><td>Write a baseline to a <code>.json</code> file, or load one (validated, up to 8 MB).</td></tr>
             <tr><td><code>OpenTelemetry: Copy Baseline Comparison Report</code></td><td>Copy the comparison as a Markdown table.</td></tr>
             <tr><td><code>OpenTelemetry: Stop Comparing With Baseline</code></td><td>Turn off the active baseline.</td></tr>
+            <tr><td><code>OpenTelemetry: Open Cardinality &amp; Cost Analyzer</code></td><td>Open the <a href="features.html#cardinality">analyzer</a> for all live data (also in the Instances view's <strong>…</strong> menu and on the flame status bar item).</td></tr>
+            <tr><td><code>Analyze Cardinality &amp; Cost</code></td><td>Right-click a service, instance or loaded file in the Instances view to open the analyzer for it.</td></tr>
           </tbody>
         </table>
       </div>
@@ -130,6 +132,20 @@
             <tr><td><code>otel.serviceMap.baseline.minErrorRateChangePp</code></td><td><code>2</code></td><td>Baselines: a significant error-rate change counts only if it is at least this many percentage points.</td></tr>
             <tr><td><code>otel.serviceMap.baseline.minFanoutChange</code></td><td><code>1</code></td><td>Baselines: change in calls per request on a call (e.g. an N+1 query) that counts as a regression or improvement.</td></tr>
             <tr><td><code>otel.serviceMap.baseline.coverageWarnPct</code></td><td><code>30</code></td><td>Baselines: warn when at least this percentage of the current services and dependencies are missing from the baseline. <code>0</code> turns it off.</td></tr>
+            <tr><td><code>otel.cardinality.enabled</code></td><td><code>true</code></td><td>Count attribute values, metric series, log patterns and bytes for the cardinality and cost analyzer. Off frees the counters; on counts from that moment.</td></tr>
+            <tr><td><code>otel.cardinality.minDistinct</code></td><td><code>100</code></td><td>Unique values an attribute needs to be flagged (10–100000); ten times this can be critical.</td></tr>
+            <tr><td><code>otel.cardinality.minDistinctRatio</code></td><td><code>0.1</code></td><td>Unique values per use (0–1) an attribute also needs to be flagged.</td></tr>
+            <tr><td><code>otel.cardinality.maxSeriesPerMetric</code></td><td><code>500</code></td><td>Series a metric needs to be flagged (10–1000000); ten times this is critical.</td></tr>
+            <tr><td><code>otel.cardinality.maxSpanNamesPerService</code></td><td><code>100</code></td><td>Unique span names a service needs to be flagged (5–100000); ten times this is critical.</td></tr>
+            <tr><td><code>otel.cost.currency</code></td><td><code>USD</code></td><td>ISO 4217 currency code shown with prices (display only).</td></tr>
+            <tr><td><code>otel.cost.perGbIngested</code></td><td>empty</td><td>Price per GB ingested (10<sup>9</sup> bytes), 0–1000000. Nothing is priced until at least one price is set.</td></tr>
+            <tr><td><code>otel.cost.perMillionSpans</code></td><td>empty</td><td>Price per million spans, 0–1000000.</td></tr>
+            <tr><td><code>otel.cost.perMillionLogs</code></td><td>empty</td><td>Price per million log records, 0–1000000.</td></tr>
+            <tr><td><code>otel.cost.perSeriesMonth</code></td><td>empty</td><td>Price per active metric series per month, 0–1000000.</td></tr>
+            <tr><td><code>otel.cost.perGbMonthRetained</code></td><td>empty</td><td>Storage price per GB per month, 0–1000000; needs <code>otel.cost.retentionDays</code>.</td></tr>
+            <tr><td><code>otel.cost.retentionDays</code></td><td>empty</td><td>Days your backend keeps data (1–3650).</td></tr>
+            <tr><td><code>otel.cost.sizeModel</code></td><td><code>protobuf</code></td><td>Which payload size per-GB prices apply to: <code>protobuf</code> or <code>json</code>.</td></tr>
+            <tr><td><code>otel.cost.trafficMultiplier</code></td><td><code>1</code></td><td>Scales local volume to production (e.g. <code>500</code>), up to 1000000; not applied to metric series.</td></tr>
             <tr><td><code>otel.ai.enabled</code></td><td><code>false</code></td><td>Let Copilot and <code>@otel</code> read collected telemetry through the <code>otel_*</code> tools. User setting only.</td></tr>
             <tr><td><code>otel.ai.redactAttributeKeys</code></td><td><code>[]</code></td><td>Extra attribute keys to mask before data is sent to a model (added to the built-in list).</td></tr>
             <tr><td><code>otel.ai.maxResultItems</code></td><td><code>25</code></td><td>Most items one AI tool call may return (1–200).</td></tr>
@@ -143,6 +159,15 @@
   "otel.port.mode": "fixed",
   "otel.port.grpc": 4317,
   "otel.port.http": 4318
+}</code></pre>
+      <p>Pricing for the <a href="features.html#cardinality-cost">cost estimate</a>, e.g. in a workspace <code>.vscode/settings.json</code> (example values, not real prices):</p>
+      <pre><code>{
+  "otel.cost.currency": "EUR",
+  "otel.cost.perGbIngested": 0.25,
+  "otel.cost.perSeriesMonth": 0.05,
+  "otel.cost.perGbMonthRetained": 0.03,
+  "otel.cost.retentionDays": 30,
+  "otel.cost.trafficMultiplier": 500
 }</code></pre>
 
       <nav class="page-nav" aria-label="Pagination">

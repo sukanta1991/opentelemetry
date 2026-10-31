@@ -59,7 +59,7 @@
       <div class="container">
         <div class="hero-inner">
           <a class="pill" href="https://github.com/sukanta1991/opentelemetry/blob/main/CHANGELOG.md" rel="noopener">
-            <b>v1.1.0</b> Live service dependency map and health insights →
+            <b>v1.3.0</b> Cardinality &amp; cost analyzer →
           </a>
           <h1>OpenTelemetry debugging <span class="gradient-text">without leaving VS&nbsp;Code</span></h1>
           <p class="lead">
@@ -172,6 +172,16 @@
             <p>A live map of services, databases, queues and external calls, with p95 latency, error rate and req/min on every node and edge. Click a service to jump to its traces, logs and code, or compare with a baseline to see what your change made slower.</p>
           </article>
           <article class="card reveal">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></div>
+            <h3>Cardinality &amp; cost</h3>
+            <ul>
+              <li>Flags IDs, full URLs and other high-cardinality attributes</li>
+              <li>Metric series explosions with the label that drives them</li>
+              <li>Span names with IDs and noisy log patterns</li>
+              <li>Monthly estimate from <em>your</em> prices, with a fix per finding</li>
+            </ul>
+          </article>
+          <article class="card reveal">
             <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
             <h3>Jump to code</h3>
             <p>Spans and logs with <code>code.*</code> attributes open the exact source line in your workspace — no copy-pasting file paths from a browser.</p>
@@ -184,7 +194,7 @@
           <article class="card reveal">
             <div class="card-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg></div>
             <h3>Ask Copilot <span class="badge">opt-in</span></h3>
-            <p>The <code>@otel</code> chat participant and ten read-only tools explain slow and failing requests, citing the trace and span IDs.</p>
+            <p>The <code>@otel</code> chat participant and eleven read-only tools explain slow and failing requests, citing the trace and span IDs.</p>
           </article>
           <article class="card reveal">
             <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></div>
@@ -217,6 +227,7 @@
             <button role="tab" id="tab-logs" aria-controls="panel-logs" aria-selected="false" tabindex="-1" type="button">Logs</button>
             <button role="tab" id="tab-metrics" aria-controls="panel-metrics" aria-selected="false" tabindex="-1" type="button">Metrics</button>
             <button role="tab" id="tab-map" aria-controls="panel-map" aria-selected="false" tabindex="-1" type="button">Service map</button>
+            <button role="tab" id="tab-cardinality" aria-controls="panel-cardinality" aria-selected="false" tabindex="-1" type="button">Cardinality</button>
             <button role="tab" id="tab-export" aria-controls="panel-export" aria-selected="false" tabindex="-1" type="button">Export</button>
           </div>
           <figure class="shot-panel" role="tabpanel" id="panel-traces" aria-labelledby="tab-traces">
@@ -242,6 +253,12 @@
               <img class="zoomable" src="assets/img/screenshots/service-map.png" width="2800" height="1640" loading="lazy" alt="Live service map with health colours, request rates and the details panel">
             </div>
             <figcaption>Services, databases, queues and external dependencies, inferred from spans.</figcaption>
+          </figure>
+          <figure class="shot-panel" role="tabpanel" id="panel-cardinality" aria-labelledby="tab-cardinality" hidden>
+            <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Cardinality &amp; Cost</span></div>
+              <img class="zoomable" src="assets/img/screenshots/cardinality.png" width="2800" height="1640" loading="lazy" alt="Cardinality and cost analyzer with findings, volume per signal, the noisiest services and a selected url.full finding">
+            </div>
+            <figcaption>Find the attributes, metric labels, span names and log patterns that will grow your telemetry bill, with redacted examples and a fix for each.</figcaption>
           </figure>
           <figure class="shot-panel" role="tabpanel" id="panel-export" aria-labelledby="tab-export" hidden>
             <div class="window"><div class="window-bar"><i></i><i></i><i></i><span>Export Logs</span></div>
@@ -338,7 +355,7 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
           </div>
           <ul class="checklist">
             <li><strong>Off by default.</strong> Enable the <code>otel.ai.enabled</code> user setting; a workspace can't turn it on.</li>
-            <li><strong>Read-only &amp; confirmed.</strong> Ten <code>otel_*</code> tools; VS Code asks before each call.</li>
+            <li><strong>Read-only &amp; confirmed.</strong> Eleven <code>otel_*</code> tools; VS Code asks before each call.</li>
             <li><strong>Redacted first.</strong> Secrets, tokens and AI prompt text are masked before anything reaches the model.</li>
           </ul>
           <a class="btn btn-ghost" href="guide/ai.html">Learn about AI features →</a>
@@ -458,6 +475,10 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
           <details>
             <summary>Can I open telemetry captured in CI or by a Collector?</summary>
             <div><p>Yes. <strong>Load Session…</strong> accepts saved sessions, bare OTLP/JSON requests and the JSON Lines written by the Collector <code>file</code> exporter.</p></div>
+          </details>
+          <details>
+            <summary>Can it tell me what my telemetry will cost in production?</summary>
+            <div><p>It estimates it. The <strong>Cardinality &amp; Cost</strong> analyzer counts volume, bytes and unique values as telemetry arrives, then projects a monthly cost from prices you enter and a traffic multiplier. No prices are built in, and every figure is labelled an estimate. <a href="guide/features.html#cardinality-cost">How it's calculated</a>.</p></div>
           </details>
           <details>
             <summary>Is it free?</summary>

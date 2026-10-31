@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "Apache-2.0",
@@ -304,6 +304,18 @@
         "title": "Stop Comparing With Baseline",
         "category": "OpenTelemetry",
         "icon": "$(circle-slash)"
+      },
+      {
+        "command": "otel.openCardinality",
+        "title": "Open Cardinality & Cost Analyzer",
+        "category": "OpenTelemetry",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "otel.analyzeCardinality",
+        "title": "Analyze Cardinality & Cost",
+        "category": "OpenTelemetry",
+        "icon": "$(flame)"
       }
     ],
     "menus": {
@@ -359,6 +371,10 @@
         {
           "command": "otel.baseline.deactivate",
           "when": "otel.baselineActive"
+        },
+        {
+          "command": "otel.analyzeCardinality",
+          "when": "false"
         }
       ],
       "webview/context": [
@@ -388,6 +404,11 @@
           "command": "otel.baseline.menu",
           "when": "view == otel.instances",
           "group": "baseline@1"
+        },
+        {
+          "command": "otel.openCardinality",
+          "when": "view == otel.instances && config.otel.cardinality.enabled",
+          "group": "baseline@2"
         },
         {
           "command": "otel.clear",
@@ -497,6 +518,11 @@
           "group": "1_open@1"
         },
         {
+          "command": "otel.analyzeCardinality",
+          "when": "view == otel.instances && config.otel.cardinality.enabled && viewItem =~ /^otel(Application|Instance|ImportedInstance|ImportedService|ImportedSession)$/",
+          "group": "1_open@4"
+        },
+        {
           "command": "otel.saveSession",
           "when": "view == otel.instances && viewItem == otelImportedSession",
           "group": "2_save@1"
@@ -585,6 +611,139 @@
           "type": "number",
           "default": 500,
           "description": "Maximum number of time-series data points retained in memory per metric series (oldest dropped first). Controls how far back metric graphs can plot."
+        },
+        "otel.cardinality.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Count attribute values, metric series, log patterns and bytes as telemetry arrives, for the cardinality and cost analyzer. Counters are kept in memory with fixed limits and survive retention. Turning this off frees them; turning it on counts from that moment."
+        },
+        "otel.cardinality.minDistinct": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 100000,
+          "scope": "resource",
+          "markdownDescription": "Cardinality analyzer: a span or log attribute is flagged when it has at least this many unique values **and** at least `#otel.cardinality.minDistinctRatio#` unique values per occurrence. Ten times this value can make it critical."
+        },
+        "otel.cardinality.minDistinctRatio": {
+          "type": "number",
+          "default": 0.1,
+          "minimum": 0,
+          "maximum": 1,
+          "scope": "resource",
+          "markdownDescription": "Cardinality analyzer: minimum unique values per occurrence (0–1) for an attribute to be flagged, so a few hundred values spread over millions of records are not reported."
+        },
+        "otel.cardinality.maxSeriesPerMetric": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 10,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cardinality analyzer: a metric is flagged when it has at least this many series (unique label sets); ten times this value is critical. The label with the most unique values is reported as the driver."
+        },
+        "otel.cardinality.maxSpanNamesPerService": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 5,
+          "maximum": 100000,
+          "scope": "resource",
+          "markdownDescription": "Cardinality analyzer: a service is flagged when it uses at least this many unique span names (or when many of them embed ids); ten times this value is critical."
+        },
+        "otel.cost.currency": {
+          "type": "string",
+          "default": "USD",
+          "pattern": "^[A-Z]{3}$",
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: currency code shown with prices (ISO 4217, e.g. `USD`, `EUR`). Display only; nothing is converted."
+        },
+        "otel.cost.perGbIngested": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: your backend's price per GB ingested (10^9 bytes). Leave empty to skip. No cost is shown until at least one price is set."
+        },
+        "otel.cost.perMillionSpans": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: your backend's price per million spans. Leave empty to skip."
+        },
+        "otel.cost.perMillionLogs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: your backend's price per million log records. Leave empty to skip."
+        },
+        "otel.cost.perSeriesMonth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: your backend's price per active metric series per month. Leave empty to skip."
+        },
+        "otel.cost.perGbMonthRetained": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: your backend's storage price per GB per month. Needs `#otel.cost.retentionDays#`. Leave empty to skip."
+        },
+        "otel.cost.retentionDays": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null,
+          "minimum": 1,
+          "maximum": 3650,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: how many days your backend keeps data, for `#otel.cost.perGbMonthRetained#`."
+        },
+        "otel.cost.sizeModel": {
+          "type": "string",
+          "enum": [
+            "protobuf",
+            "json"
+          ],
+          "enumDescriptions": [
+            "Uncompressed OTLP protobuf (gRPC and OTLP/HTTP protobuf exporters).",
+            "OTLP/JSON (OTLP/HTTP JSON exporters)."
+          ],
+          "default": "protobuf",
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: which payload size the per-GB prices apply to."
+        },
+        "otel.cost.trafficMultiplier": {
+          "type": "number",
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "maximum": 1000000,
+          "scope": "resource",
+          "markdownDescription": "Cost estimates: scale local traffic to the volume you expect in production (e.g. `500` if production handles 500× the requests you send locally). Applies to volume, not to metric series."
         },
         "otel.import.maxFileSize": {
           "type": "number",
@@ -1044,6 +1203,44 @@
               "minimum": 1,
               "maximum": 200,
               "description": "Maximum changes to list, most significant first (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_analyzeCardinality",
+        "displayName": "Analyze Telemetry Cardinality and Cost",
+        "toolReferenceName": "otelCardinality",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Find telemetry that drives storage, indexing or ingestion cost: high-cardinality attributes and metric labels, ID-like values, noisy services, operations and log patterns.",
+        "modelDescription": "Analyzes usage counters kept since telemetry started arriving (independent of the in-memory buffers) for live data or a loaded session, optionally one service or instance. Returns findings ordered by severity: high-cardinality attributes (rule R1), ID-like values such as UUIDs, full URLs or emails (R2), metrics with many series and the label driving them (R3), span names with IDs (R4) and noisy log patterns (R6), each with unique-value counts (approximate above 128), value class, growth (growing, saturated or insufficient), share of the signal's bytes, redacted examples and a remediation hint. Also returns volume per day (spans, logs, metric points, bytes as uncompressed OTLP protobuf and JSON), active series, the noisiest services and operations, top log patterns and metrics by series, a monthly cost estimate only when the user set prices (with pricingSource and assumptions), and baselineDelta (new, grown and resolved findings and volume changes) when the active baseline has a cardinality summary. Errors list known services, instances or sessions; an error says when the analyzer is turned off.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "string",
+              "description": "Only this service (service.name, case-insensitive). Omit for all services."
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Only this instance id, as returned by otel_listServices."
+            },
+            "session": {
+              "type": "string",
+              "description": "Analyze a loaded session file (its file name) instead of live data."
+            },
+            "signal": {
+              "type": "string",
+              "enum": ["all", "spans", "logs", "metrics"],
+              "description": "Which signal's findings and tables to return: all (default), spans, logs or metrics."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum findings to list, most severe first (default 25, capped by otel.ai.maxResultItems)."
             }
           }
         }

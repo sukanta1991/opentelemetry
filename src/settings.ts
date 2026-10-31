@@ -4,6 +4,8 @@ import { AiSettings, sanitizeAiSettings } from './ai/aiSettings';
 import { DEFAULT_MAX_ITEMS } from './ai/limits';
 import { ReceiverConfig } from './receiver/receiver';
 import { BaselineSettings, DEFAULT_BASELINE_SETTINGS, sanitizeBaselineSettings } from './views/baselineCompare';
+import { DEFAULT_PRICING, Pricing, sanitizePricing } from './views/cardinalityCost';
+import { CardinalitySettings, DEFAULT_CARDINALITY_SETTINGS, sanitizeCardinalitySettings } from './views/cardinalityRules';
 import { ServiceMapThresholds, sanitizeThresholds } from './views/serviceMapModel';
 
 export interface OtelSettings extends ReceiverConfig {
@@ -14,6 +16,7 @@ export interface OtelSettings extends ReceiverConfig {
   maxMetricPointsPerSeries: number;
   importMaxFileSizeMb: number;
   importMaxRecords: number;
+  cardinalityEnabled: boolean;
 }
 
 export function readSettings(): OtelSettings {
@@ -31,6 +34,7 @@ export function readSettings(): OtelSettings {
     maxMetricPointsPerSeries: c.get<number>('retention.maxMetricPointsPerSeries', 500),
     importMaxFileSizeMb: Math.max(1, c.get<number>('import.maxFileSize', 200)),
     importMaxRecords: Math.max(1, c.get<number>('import.maxRecords', 50000)),
+    cardinalityEnabled: c.get<boolean>('cardinality.enabled', true) !== false,
   };
 }
 
@@ -53,6 +57,19 @@ export function readBaselineSettings(): BaselineSettings {
   return sanitizeBaselineSettings(
     Object.fromEntries(Object.keys(DEFAULT_BASELINE_SETTINGS).map((k) => [k, c.get<unknown>(k)]))
   );
+}
+
+export function readCardinalitySettings(): CardinalitySettings {
+  const c = vscode.workspace.getConfiguration('otel.cardinality');
+  return sanitizeCardinalitySettings(
+    Object.fromEntries(Object.keys(DEFAULT_CARDINALITY_SETTINGS).map((k) => [k, c.get<unknown>(k)]))
+  );
+}
+
+/** Prices from settings; the panel's workspace overrides are applied on top by the caller. */
+export function readPricing(): Pricing {
+  const c = vscode.workspace.getConfiguration('otel.cost');
+  return sanitizePricing(Object.fromEntries(Object.keys(DEFAULT_PRICING).map((k) => [k, c.get<unknown>(k)])));
 }
 
 export function readAiSettings(): AiSettings {

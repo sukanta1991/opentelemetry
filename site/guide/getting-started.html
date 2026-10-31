@@ -167,6 +167,15 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
         <li>Open the <strong>Service Map</strong> to see services, databases and queues and how they connect.</li>
       </ol>
 
+      <h3 id="telemetry-cost">Find telemetry that will cost you in production</h3>
+      <ol>
+        <li>Run your app and send representative traffic for a few minutes.</li>
+        <li>Click <strong>Open Cardinality &amp; Cost Analyzer</strong> in the Instances view's <strong>…</strong> menu or the flame status bar item, or right-click a service and choose <strong>Analyze Cardinality &amp; Cost</strong>. Services with findings show a badge in the Instances view.</li>
+        <li>On <strong>Overview</strong>, start with the critical findings. Select one for redacted example values, how its unique values grew, and the fix (for example “group by <code>http.route</code> instead of <code>url.full</code>”).</li>
+        <li>Open <strong>Pricing</strong>, enter your backend's prices and a <strong>traffic multiplier</strong> (production volume ÷ local volume), and click <strong>Calculate</strong> to see a monthly estimate. <strong>Save for this workspace</strong> keeps the prices.</li>
+        <li>Capture a baseline before and after a fix: the <strong>Baseline</strong> tab lists new, grown and resolved findings. See <a href="features.html#cardinality">Cardinality &amp; cost analyzer</a>.</li>
+      </ol>
+
       <nav class="page-nav" aria-label="Pagination">
         <a class="next" href="features.html"><small>Next</small>Features in depth →</a>
       </nav>

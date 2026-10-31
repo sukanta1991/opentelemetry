@@ -3,12 +3,16 @@
 
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { readAiSettings, readBaselineSettings } from '../settings';
+import { readAiSettings, readBaselineSettings, readCardinalitySettings, readPricing } from '../settings';
 import { BaselineRegistry } from '../views/baselineRegistry';
 import type { Snapshot } from '../views/baseline';
+import { PRICING_OVERRIDES_KEY, effectivePricing } from '../views/cardinalityCost';
 import { BaselineLookup, matchBaseline } from './analysis/baseline';
+import { CardinalityInputs } from './analysis/cardinality';
 import { TOOL_NAMES, ToolName } from './toolNames';
 import { describeInvocation, runTool } from './toolRunner';
+
+const USES_BASELINES: ReadonlySet<ToolName> = new Set(['otel_compareBaseline', 'otel_analyzeCardinality']);
 
 export function registerAiTools(
   context: vscode.ExtensionContext,
@@ -19,8 +23,14 @@ export function registerAiTools(
   // Forks without the API, and the activation test's vscode stand-in, have no lm namespace.
   if (typeof vscode.lm?.registerTool !== 'function') return;
   for (const name of TOOL_NAMES) {
-    context.subscriptions.push(vscode.lm.registerTool(name, createTool(name, controller, log, baselines)));
+    context.subscriptions.push(vscode.lm.registerTool(name, createTool(name, controller, log, baselines, context.workspaceState)));
   }
+}
+
+// Settings with the Cardinality & Cost panel's workspace pricing overrides on top.
+function cardinalityInputs(workspaceState: vscode.Memento): CardinalityInputs {
+  const { pricing, source } = effectivePricing(readPricing(), workspaceState.get<unknown>(PRICING_OVERRIDES_KEY));
+  return { settings: readCardinalitySettings(), pricing, pricingSource: source };
 }
 
 // Loads only the active baseline and any the input names, since tool runs themselves are synchronous.
@@ -54,7 +64,8 @@ function createTool(
   name: ToolName,
   controller: OtelController,
   log: vscode.LogOutputChannel,
-  registry: BaselineRegistry | undefined
+  registry: BaselineRegistry | undefined,
+  workspaceState: vscode.Memento
 ): vscode.LanguageModelTool<unknown> {
   return {
     prepareInvocation(options) {
@@ -65,13 +76,14 @@ function createTool(
       };
     },
     async invoke(options, token) {
-      const baselines = name === 'otel_compareBaseline' && registry ? await baselineLookup(registry, options.input) : undefined;
+      const baselines = USES_BASELINES.has(name) && registry ? await baselineLookup(registry, options.input) : undefined;
       const run = runTool(name, options.input, {
         store: controller.store,
         settings: readAiSettings(),
         receiverRunning: controller.isRunning(),
         now: Date.now(),
         baselines,
+        cardinality: name === 'otel_analyzeCardinality' ? cardinalityInputs(workspaceState) : undefined,
         checkCancelled: () => {
           if (token.isCancellationRequested) throw new vscode.CancellationError();
         },

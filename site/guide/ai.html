@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Ask Copilot about your telemetry — OpenTelemetry for VS Code</title>
-  <meta name="description" content="Use the @otel chat participant and ten read-only otel_* tools to investigate slow and failing requests with Copilot.">
+  <meta name="description" content="Use the @otel chat participant and eleven read-only otel_* tools to investigate slow and failing requests with Copilot.">
   <link rel="canonical" href="https://sukanta1991.github.io/opentelemetry/guide/ai.html">
   <meta name="theme-color" content="#1e1e2e">
   <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
@@ -86,6 +86,9 @@
             <tr><td><code>@otel /errors</code></td><td>Groups recent failing requests by endpoint and explains the top failure.</td></tr>
             <tr><td><code>@otel /agent</code></td><td>Summarizes the latest AI-agent run: LLM vs. tool time, token usage, slowest and failed tools.</td></tr>
             <tr><td><code>@otel what regressed since my baseline?</code></td><td>Compares current traffic with the active <a href="features.html#baselines">service map baseline</a> and explains the biggest regressions, with example traces.</td></tr>
+            <tr><td><code>@otel which attributes will blow up my telemetry bill?</code></td><td>Lists high-cardinality attributes, metric labels and noisy services with fixes, and a cost estimate if you <a href="features.html#cardinality-cost">set prices</a>.</td></tr>
+            <tr><td><code>@otel why does checkout have so many metric series?</code></td><td>Names the metrics with the most series and the label driving them, with redacted example values and what to group by instead.</td></tr>
+            <tr><td><code>@otel what got noisier since my baseline?</code></td><td>Lists new, grown and resolved cardinality findings and volume changes since the active baseline.</td></tr>
           </tbody>
         </table>
       </div>
@@ -106,6 +109,7 @@
             <tr><td><code>otel_getServiceMap</code></td><td><code>#otelServiceMap</code></td><td>Service dependencies with call counts and error rates</td></tr>
             <tr><td><code>otel_genAiSummary</code></td><td><code>#otelAgent</code></td><td>An AI-agent trace (OpenTelemetry <code>gen_ai.*</code> conventions): time split, tokens per model, slowest and failed calls</td></tr>
             <tr><td><code>otel_compareBaseline</code></td><td><code>#otelBaseline</code></td><td>Current traffic (or another baseline) compared with a service map baseline: what regressed, improved, appeared or disappeared, by service, call or operation</td></tr>
+            <tr><td><code>otel_analyzeCardinality</code></td><td><code>#otelCardinality</code></td><td>High-cardinality attributes and metric labels, ID-like values, noisy services, operations and log patterns, volume per day, a cost estimate when you set prices, and changes since the active baseline. Optional <code>service</code>, <code>instanceId</code>, <code>session</code>, <code>signal</code> (<code>all</code>, <code>spans</code>, <code>logs</code>, <code>metrics</code>) and <code>limit</code>.</td></tr>
           </tbody>
         </table>
       </div>

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { HARD_MAX_ITEMS } from '../../src/ai/limits';
 import { SLASH_COMMANDS } from '../../src/ai/prompt';
-import { BASELINE_SCOPES, SEVERITY_NUMBER, SPAN_GROUPS, SPAN_SORTS, STATUS_VALUES, TRACE_SORTS } from '../../src/ai/toolInputs';
+import { BASELINE_SCOPES, CARDINALITY_SIGNALS, SEVERITY_NUMBER, SPAN_GROUPS, SPAN_SORTS, STATUS_VALUES, TRACE_SORTS } from '../../src/ai/toolInputs';
 import { TOOL_NAMES } from '../../src/ai/toolNames';
 import { parseToolInput, toolTitle } from '../../src/ai/toolRunner';
 
@@ -69,6 +69,7 @@ describe('ai manifest (package.json)', () => {
     assert.deepStrictEqual(props('otel_findSpans').groupBy.enum, [...SPAN_GROUPS]);
     assert.deepStrictEqual(props('otel_queryLogs').minSeverity.enum, Object.keys(SEVERITY_NUMBER));
     assert.deepStrictEqual(props('otel_compareBaseline').scope.enum, [...BASELINE_SCOPES]);
+    assert.deepStrictEqual(props('otel_analyzeCardinality').signal.enum, [...CARDINALITY_SIGNALS]);
     for (const t of tools) {
       const limit = t.inputSchema.properties.limit;
       if (limit) assert.deepStrictEqual([limit.minimum, limit.maximum], [1, HARD_MAX_ITEMS], t.name);
