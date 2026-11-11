@@ -7,6 +7,7 @@ import { SLASH_COMMANDS } from '../../src/ai/prompt';
 import { BASELINE_SCOPES, CARDINALITY_SIGNALS, SEVERITY_NUMBER, SPAN_GROUPS, SPAN_SORTS, STATUS_VALUES, TRACE_SORTS } from '../../src/ai/toolInputs';
 import { TOOL_NAMES } from '../../src/ai/toolNames';
 import { parseToolInput, toolTitle } from '../../src/ai/toolRunner';
+import { configProperties } from './manifestUtil';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
 const tools: any[] = pkg.contributes.languageModelTools;
@@ -77,7 +78,7 @@ describe('ai manifest (package.json)', () => {
   });
 
   it('keeps AI access off by default and application-scoped', () => {
-    const cfg = pkg.contributes.configuration.properties;
+    const cfg = configProperties(pkg);
     assert.strictEqual(cfg['otel.ai.enabled'].default, false);
     assert.strictEqual(cfg['otel.ai.enabled'].scope, 'application');
     assert.deepStrictEqual(cfg['otel.ai.redactAttributeKeys'].default, []);

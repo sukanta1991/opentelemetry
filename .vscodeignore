@@ -17,6 +17,7 @@ SECURITY.md
 images/screenshots/**
 site/**
 _site/**
+coverage/**
 node_modules/**/*.d.ts
 node_modules/**/*.d.ts.map
 node_modules/**/*.ts

@@ -13,6 +13,7 @@ import {
   sanitizeOverrides,
   sanitizePricing,
 } from '../../src/views/cardinalityCost';
+import { configProperties } from './manifestUtil';
 
 const USAGE: DailyUsage = {
   bytes: { protobuf: 2e9, json: 5e9 },
@@ -132,7 +133,7 @@ describe('cardinality cost', () => {
 
   it('package.json defaults, ranges and scopes match', () => {
     const pkg = JSON.parse(readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
-    const props = pkg.contributes.configuration.properties;
+    const props = configProperties(pkg);
     for (const k of Object.keys(DEFAULT_PRICING) as (keyof Pricing)[]) {
       const p = props[`otel.cost.${k}`];
       assert.ok(p, k);

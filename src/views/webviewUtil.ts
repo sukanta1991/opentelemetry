@@ -122,6 +122,13 @@ const baseCss = `
   tr.selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
   .muted { color: var(--vscode-descriptionForeground); }
   .empty { padding: 24px; text-align: center; color: var(--vscode-descriptionForeground); }
+  .empty-title { color: var(--vscode-foreground); font-weight: 600; }
+  .empty-hint { max-width: 560px; margin: 6px auto 0; line-height: 1.5; }
+  .empty code {
+    padding: 1px 4px; border-radius: 3px; user-select: all;
+    background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+  }
+  .empty-clear { margin-top: 10px; }
   code, pre { font-family: var(--vscode-editor-font-family, monospace); }
 `;
 

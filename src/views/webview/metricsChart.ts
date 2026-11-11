@@ -40,6 +40,8 @@ import {
   reduceAcrossSeries,
   windowSeries,
 } from './stats';
+import { emptyCase, emptyContent } from './emptyState';
+import { renderEmptyState } from './emptyStateView';
 
 interface LineGraph {
   kind: 'line';
@@ -95,6 +97,8 @@ const KIND_LABEL: Record<ChartKind, string> = {
 type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
+let gone = false;
+let imported = false;
 let view: 'table' | 'graph' = 'table';
 // The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
 let useLocalTime = document.body.dataset.useLocalTime !== 'false';
@@ -962,7 +966,8 @@ function renderGraphs(rows: MetricVM[]): void {
 function apply(): void {
   const rows = filtered();
   count.textContent = rows.length + ' of ' + metrics.length + ' metrics';
-  empty.style.display = metrics.length ? 'none' : 'block';
+  const c = emptyCase(gone, metrics.length, rows.length);
+  renderEmptyState(empty, c && emptyContent('metrics', c, imported), clearFilters);
   const isGraph = view === 'graph';
   tableWrap.style.display = isGraph ? 'none' : '';
   graphWrap.style.display = isGraph ? '' : 'none';
@@ -993,6 +998,13 @@ function setView(next: 'table' | 'graph'): void {
   view = next;
   persistState();
   apply();
+}
+
+function clearFilters(): void {
+  q.value = '';
+  persistState();
+  apply();
+  q.focus();
 }
 
 if (typeof savedState.query === 'string') q.value = savedState.query;
@@ -1086,6 +1098,8 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
   if (m && m.type === 'data') {
     metrics = m.metrics || [];
+    gone = m.gone === true;
+    imported = m.imported === true;
     apply();
   }
 });

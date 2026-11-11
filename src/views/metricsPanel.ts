@@ -74,7 +74,7 @@ export class MetricsPanel {
         bars: m.type === 'histogram' ? histogramBars(m) ?? undefined : undefined,
         buckets: m.type === 'histogram' ? histogramBuckets(m) ?? undefined : undefined,
       }));
-    this.panel.webview.postMessage({ type: 'data', metrics });
+    this.panel.webview.postMessage({ type: 'data', metrics, imported: inst.kind === 'imported' });
   }
 
   private dispose(): void {
@@ -235,7 +235,7 @@ const STYLE = `
   .legend-item { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; color: var(--vscode-descriptionForeground); }
   .legend-item .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
   .legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
-  #graphWrap[data-empty="true"] .charts-grid::after { content: "No graphable series yet for the current filter."; color: var(--vscode-descriptionForeground); padding: 24px; }
+  #graphWrap[data-empty="true"] .charts-grid::after { content: "No graphable series for the current filter. Graphs need numeric data points inside the selected time range."; color: var(--vscode-descriptionForeground); padding: 24px; }
 
   /* Per-graph dropdowns */
   .card-controls .chart-select { font-size: 0.85em; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border)); border-radius: 3px; padding: 1px 4px; max-width: 100%; }
@@ -273,7 +273,7 @@ const STYLE = `
 
 const BODY = `
 <div class="toolbar">
-  <input id="q" type="text" placeholder="Filter metric name…" style="min-width:200px" />
+  <input id="q" type="text" placeholder="Filter metric name…" aria-label="Filter metric name" style="min-width:200px" />
   <span class="seg" role="group" aria-label="View mode">
     <button id="viewTable" class="secondary active" title="Table view">Table</button>
     <button id="viewGraph" class="secondary" title="Graph view">Graph</button>

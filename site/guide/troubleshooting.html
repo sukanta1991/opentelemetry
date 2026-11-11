@@ -68,16 +68,16 @@
       <p class="lead">Fixes for the most common problems. If yours isn't here, see <a href="#reporting">Reporting a problem</a>.</p>
 
       <h2 id="not-running">The Instances view says the receiver isn't running</h2>
-      <p>The receiver does not start automatically by default. Click <strong>Start receiver</strong> in the Instances view (or the status bar), or set <code>otel.launchOnStartup</code> to <code>true</code> to start it whenever VS Code launches.</p>
+      <p>The receiver does not start automatically by default. Click <strong>Start Receiver</strong> in the OpenTelemetry view (or click the <strong>OTel</strong> status bar item and choose <strong>Start Receiver</strong>), or set <code>otel.launchOnStartup</code> to <code>true</code> to start it whenever VS Code launches.</p>
 
       <h2 id="port-in-use">“Port already in use”</h2>
-      <p>If the configured port is busy, the extension reports the error and offers to retry on randomly assigned ports. You can also set <code>otel.port.mode</code> to <code>random</code>, or change <code>otel.port.grpc</code> / <code>otel.port.http</code> to free ports.</p>
+      <p>If the configured port is busy, the extension reports the error and offers to retry on randomly assigned ports or open the port settings. You can also set <code>otel.port.mode</code> to <code>random</code>, or change <code>otel.port.grpc</code> / <code>otel.port.http</code> to free ports.</p>
 
       <h2 id="no-telemetry">No telemetry appears</h2>
       <ul>
-        <li>Confirm the exporter endpoint matches the receiver: <strong>gRPC</strong> uses <code>4317</code>, <strong>HTTP</strong> uses <code>4318</code>. Set <code>OTEL_EXPORTER_OTLP_PROTOCOL</code> (<code>grpc</code> or <code>http/protobuf</code>) accordingly.</li>
+        <li>Confirm the exporter endpoint matches the receiver: <strong>gRPC</strong> uses <code>4317</code>, <strong>HTTP</strong> uses <code>4318</code>. Set <code>OTEL_EXPORTER_OTLP_PROTOCOL</code> (<code>grpc</code> or <code>http/protobuf</code>) accordingly. <strong>Connect Your App…</strong> shows the current endpoints.</li>
         <li>For apps launched from VS Code, make sure <code>otel.overwriteEnvVars</code> is <code>true</code>.</li>
-        <li>For external apps, copy the endpoint with <strong>OpenTelemetry: Copy OTLP Endpoint</strong> and verify your SDK is actually exporting.</li>
+        <li>For external apps, verify your SDK is actually exporting. If a service shows up but its <strong>Traces</strong>, <strong>Logs</strong> or <strong>Metrics</strong> row says <em>none yet</em>, hover the row: that signal's exporter is probably not enabled (e.g. <code>OTEL_LOGS_EXPORTER=otlp</code>).</li>
       </ul>
       <div class="callout info">
         <p>The receiver binds to <code>127.0.0.1</code> by default. A firewall prompt may appear the first time it starts.</p>
@@ -91,7 +91,7 @@
       <p><strong>View Trace</strong> and <strong>Find Trace by ID</strong> can only open traces the receiver has received and still retains. The trace may not have been exported (sampling, a missing exporter), may have been evicted by <code>otel.retention.maxTracesPerInstance</code>, or the log may come from an imported file.</p>
 
       <h2 id="data-disappeared">My collected data disappeared</h2>
-      <p>Live telemetry is stored <strong>in memory</strong> and is cleared when the receiver restarts or when you run <strong>Clear Collected Data</strong>. To keep a copy, click <strong>Save Session…</strong> and load the file again later with <strong>Load Session…</strong>. Loaded data survives <strong>Clear Collected Data</strong> and is removed only when you remove it.</p>
+      <p>Live telemetry is stored <strong>in memory</strong> and is cleared when VS Code closes or when you run <strong>Clear Collected Data</strong>. Stopping or restarting the receiver keeps it. To keep a copy, click <strong>Save Session…</strong> and load the file again later with <strong>Load Session…</strong>. Loaded data survives <strong>Clear Collected Data</strong> and is removed only when you remove it.</p>
 
       <h2 id="baseline-waiting">The baseline comparison says “Waiting for calls” or “Too few calls to compare”</h2>
       <ul>

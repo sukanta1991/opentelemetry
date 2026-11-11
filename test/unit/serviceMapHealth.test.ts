@@ -2,6 +2,7 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import * as path from 'path';
+import { configProperties } from './manifestUtil';
 import {
   CallStats,
   DEFAULT_THRESHOLDS,
@@ -122,7 +123,7 @@ describe('serviceMap health', () => {
 
   it('package.json defaults match DEFAULT_THRESHOLDS', () => {
     const pkg = JSON.parse(readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
-    const props = pkg.contributes.configuration.properties;
+    const props = configProperties(pkg);
     for (const key of Object.keys(T) as (keyof typeof T)[]) {
       assert.strictEqual(props[`otel.serviceMap.${key}`].default, T[key], key);
       assert.strictEqual(props[`otel.serviceMap.${key}`].scope, 'resource', key);

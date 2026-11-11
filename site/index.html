@@ -286,7 +286,7 @@
           </div>
           <div class="step reveal">
             <h3>Start the receiver</h3>
-            <p>Open the <strong>OpenTelemetry</strong> view in the Activity Bar and click <strong>Start receiver</strong>. The status bar shows the active gRPC and HTTP ports.</p>
+            <p>Open the <strong>OpenTelemetry</strong> view in the Activity Bar and click <strong>Start Receiver</strong>. The status bar shows the active gRPC and HTTP ports, and the <strong>Get Started</strong> walkthrough guides you through the rest.</p>
           </div>
           <div class="step reveal">
             <h3>Send telemetry</h3>
@@ -336,7 +336,7 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
 -Dotel.exporter.otlp.endpoint=http://127.0.0.1:4317 -Dotel.exporter.otlp.protocol=grpc</code></pre>
             </div>
           </div>
-          <p class="note">Tip: <strong>OpenTelemetry: Show Instrumentation Snippet</strong> gives you these with your actual ports filled in.</p>
+          <p class="note">Tip: <strong>OpenTelemetry: Connect Your App…</strong> gives you these with your actual ports filled in, or opens a terminal with them already set.</p>
         </div>
       </div>
     </section>
@@ -462,7 +462,7 @@ exporter = OTLPSpanExporter(endpoint=<span class="tok-s">"http://127.0.0.1:4317"
           </details>
           <details>
             <summary>My app doesn't run from VS Code. Can I still use it?</summary>
-            <div><p>Yes. Use <strong>Copy OTLP Endpoint</strong> or <strong>Show Instrumentation Snippet</strong> and point your exporter at <code>http://127.0.0.1:4317</code> (gRPC) or <code>http://127.0.0.1:4318</code> (HTTP).</p></div>
+            <div><p>Yes. Use <strong>Connect Your App…</strong> to copy the environment variables or a snippet, and point your exporter at <code>http://127.0.0.1:4317</code> (gRPC) or <code>http://127.0.0.1:4318</code> (HTTP).</p></div>
           </details>
           <details>
             <summary>Where is my data stored?</summary>

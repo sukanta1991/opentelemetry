@@ -31,6 +31,7 @@ import {
   cellText,
   collectAttrKeys,
   defaultColumnState,
+  defaultLogsPanelState,
   filterLogs,
   isLogDensity,
   isLogRangeKind,
@@ -48,6 +49,8 @@ import {
   severityClass,
   sortLogs,
 } from './logView';
+import { emptyCase, emptyContent } from './emptyState';
+import { renderEmptyState } from './emptyStateView';
 import { byCodeUnit } from '../../compare';
 
 interface VsCodeApi {
@@ -96,6 +99,8 @@ let indexBySeq = new Map<number, number>();
 let winStart = 0;
 let winEnd = 0;
 let estimate = DEFAULT_ROW_HEIGHT;
+// Loaded from a file: an empty list means the file has no logs, not a missing exporter.
+let imported = false;
 
 const rowsEl = document.querySelector<HTMLDivElement>('.rows') as HTMLDivElement;
 const tableEl = rowsEl.querySelector('table') as HTMLTableElement;
@@ -410,8 +415,26 @@ function apply(preserveScroll = true): void {
   paint();
 
   refreshSelectionUi();
-  empty.style.display = logs.length ? 'none' : 'block';
+  const c = emptyCase(false, logs.length, filtered.length);
+  renderEmptyState(empty, c && emptyContent('logs', c, imported), clearFilters);
   updateRetentionHint();
+}
+
+function clearFilters(): void {
+  const defaults = defaultLogsPanelState();
+  state.query = q.value = defaults.query;
+  state.attrFilter = attr.value = defaults.attrFilter;
+  state.level = defaults.level;
+  level.value = String(defaults.level);
+  state.range = defaults.range;
+  range.value = defaults.range;
+  persist();
+  if (correlate) setCorrelation(null);
+  else {
+    rowsEl.scrollTop = 0;
+    apply(false);
+  }
+  q.focus();
 }
 
 function updateRetentionHint(): void {
@@ -1151,6 +1174,8 @@ window.addEventListener('message', (e: MessageEvent) => {
     pauseBtn.hidden = m.readOnly === true;
     roBadge.hidden = m.readOnly !== true;
     if (m.readOnly) roBadge.textContent = m.source ? `Imported · ${m.source}` : 'Imported';
+    imported = m.readOnly === true;
+    apply();
     return;
   }
   if (m?.type === 'promptExport') {

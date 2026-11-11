@@ -697,7 +697,10 @@ function renderEmpty(): void {
   const hasNodes = !!model && model.nodes.length > 0;
   let text = '';
   if (banner && (banner.kind === 'gone' || !hasNodes)) text = banner.text;
-  else if (model && !hasNodes) text = 'No traces yet. Send distributed traces (e.g. HTTP calls) to populate the map.';
+  else if (model && !hasNodes)
+    text =
+      'No traces yet. The map is built from spans that call other services: HTTP, gRPC, database and messaging clients. ' +
+      'Instrument at least one client and the server it calls.';
   emptyEl.hidden = !text;
   emptyEl.textContent = text;
   emptyEl.classList.toggle('error', banner?.kind === 'error');

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { registerOtelParticipant } from './ai/participant';
 import { registerAiTools } from './ai/tools';
 import { OtelController } from './controller';
+import { ConnectAction, MenuItem, Shell, connectItems, envBlock, otlpEnv, statusMenuItems } from './integration/connectApp';
 import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
 import { readCardinalitySettings, readSettings } from './settings';
@@ -30,7 +31,7 @@ import { openCodeLocation } from './views/codeNav';
 import { CardinalityDecorations } from './views/cardinalityDecorations';
 import { CardinalityEvaluator } from './views/cardinalityEvaluator';
 import { CardinalityPanel } from './views/cardinalityPanel';
-import { ImportedSessionNode, InstanceNode, InstancesTreeProvider, cardinalityScopeOf } from './views/instancesTree';
+import { ImportedSessionNode, InstanceNode, InstancesTreeProvider, ServiceMapNode, cardinalityScopeOf } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
@@ -47,6 +48,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   controller = new OtelController(context.extensionPath);
   void controller.resetRunningContext();
   context.subscriptions.push({ dispose: () => controller.dispose() });
+
+  let hasData: boolean | undefined;
+  const syncHasData = () => {
+    const next = controller.store.getAllInstances().length > 0;
+    if (next === hasData) return;
+    hasData = next;
+    void vscode.commands.executeCommand('setContext', 'otel.hasData', next);
+  };
+  syncHasData();
+  context.subscriptions.push(controller.store.onDidChange(syncHasData));
 
   // Idle until data arrives: evaluates at most every 2 s after a change, never while the analyzer is off.
   const cardinality = new CardinalityEvaluator(controller.store, readCardinalitySettings);
@@ -141,15 +152,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('otel.copyEndpoint', () => copyEndpoint()),
     vscode.commands.registerCommand('otel.copyEnvVar', () => copyEnvVar()),
     vscode.commands.registerCommand('otel.openTerminalWithEnv', () => openTerminalWithEnv()),
+    vscode.commands.registerCommand('otel.connectApp', () => connectApp()),
+    vscode.commands.registerCommand('otel.showStatusMenu', async () => {
+      const items = statusMenuItems({
+        running: controller.isRunning(),
+        hasData: hasData === true,
+        startError: controller.getStartError(),
+      });
+      const pick = await vscode.window.showQuickPick(items.map(quickPickItem), { title: 'OpenTelemetry' });
+      if (pick && 'action' in pick && pick.action) await vscode.commands.executeCommand(pick.action);
+    }),
+    vscode.commands.registerCommand('otel.openWalkthrough', () =>
+      vscode.commands.executeCommand('workbench.action.openWalkthrough', `${context.extension.id}#otel.gettingStarted`, false)
+    ),
     vscode.commands.registerCommand('otel.openSettings', () =>
       vscode.commands.executeCommand(
         'workbench.action.openSettings',
         `@ext:${context.extension.id}`
       )
     ),
-    vscode.commands.registerCommand('otel.openServiceMap', (arg: unknown) =>
-      ServiceMapPanel.show(controller, arg instanceof ImportedSessionNode ? arg.view.session.id : LIVE_REALM)
-    ),
+    vscode.commands.registerCommand('otel.openServiceMap', (arg: unknown) => {
+      let realm = LIVE_REALM;
+      if (arg instanceof ServiceMapNode) realm = arg.realm;
+      else if (arg instanceof ImportedSessionNode) realm = arg.view.session.id;
+      ServiceMapPanel.show(controller, realm);
+    }),
     vscode.commands.registerCommand('otel.showSnippets', () => showSnippets()),
     vscode.commands.registerCommand('otel.openLogs', async (arg) => {
       const id = await resolveInstanceId(arg);
@@ -256,16 +283,24 @@ async function findTrace(): Promise<void> {
   if (target) revealTrace(controller, target);
 }
 
-function requireRunning(): boolean {
-  if (!controller.isRunning()) {
-    vscode.window.showWarningMessage('OpenTelemetry: receiver is not running. Start it first.');
-    return false;
-  }
-  return true;
+/** Offers to start the receiver when it is stopped; true once it is running. */
+async function ensureRunning(): Promise<boolean> {
+  if (controller.isRunning()) return true;
+  const pick = await vscode.window.showWarningMessage(
+    'OpenTelemetry: the receiver is not running. Start it to get an endpoint for your app.',
+    'Start Receiver'
+  );
+  if (pick) await controller.start();
+  return controller.isRunning();
+}
+
+async function copyText(text: string, shown = text): Promise<void> {
+  await vscode.env.clipboard.writeText(text);
+  vscode.window.showInformationMessage(`Copied: ${shown}`);
 }
 
 async function copyEndpoint(): Promise<void> {
-  if (!requireRunning()) return;
+  if (!(await ensureRunning())) return;
   const ep = controller.getEndpoints()!;
   const pick = await vscode.window.showQuickPick(
     [
@@ -274,31 +309,68 @@ async function copyEndpoint(): Promise<void> {
     ],
     { placeHolder: 'Copy which endpoint?' }
   );
-  if (pick) {
-    await vscode.env.clipboard.writeText(pick.value);
-    vscode.window.showInformationMessage(`Copied: ${pick.value}`);
-  }
+  if (pick) await copyText(pick.value);
 }
 
-async function copyEnvVar(): Promise<void> {
-  if (!requireRunning()) return;
+const nativeShell = (): Shell => (process.platform === 'win32' ? 'powershell' : 'posix');
+
+async function copyEnvVar(shell: Shell = nativeShell()): Promise<void> {
+  if (!(await ensureRunning())) return;
   const ep = controller.getEndpoints()!;
-  const text = `OTEL_EXPORTER_OTLP_ENDPOINT=${ep.grpcEndpoint}`;
-  await vscode.env.clipboard.writeText(text);
-  vscode.window.showInformationMessage(`Copied: ${text}`);
+  await copyText(envBlock(otlpEnv(ep.grpcEndpoint), shell), `OTLP environment variables for ${ep.grpcEndpoint}`);
 }
 
-function openTerminalWithEnv(): void {
-  if (!requireRunning()) return;
+async function openTerminalWithEnv(): Promise<void> {
+  if (!(await ensureRunning())) return;
   const ep = controller.getEndpoints()!;
   const terminal = vscode.window.createTerminal({
     name: 'OTel-enabled',
-    env: {
-      OTEL_EXPORTER_OTLP_ENDPOINT: ep.grpcEndpoint,
-      OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc',
-    },
+    env: otlpEnv(ep.grpcEndpoint),
   });
   terminal.show();
+}
+
+function quickPickItem<A extends string>(i: MenuItem<A>): MenuItem<A> | vscode.QuickPickItem {
+  return i.separator ? { label: i.label, kind: vscode.QuickPickItemKind.Separator } : i;
+}
+
+async function connectApp(): Promise<void> {
+  if (!(await ensureRunning())) return;
+  const endpoints = controller.getEndpoints()!;
+  const items = connectItems({
+    endpoints,
+    overwriteEnvVars: readSettings().overwriteEnvVars,
+    windows: process.platform === 'win32',
+  }).map(quickPickItem);
+  const pick = await vscode.window.showQuickPick(items, {
+    title: 'Connect Your App',
+    placeHolder: 'How does your app start?',
+    matchOnDetail: true,
+  });
+  const action = pick && 'action' in pick ? (pick.action as ConnectAction | undefined) : undefined;
+  switch (action) {
+    case 'debug':
+      await vscode.commands.executeCommand('workbench.action.debug.selectandstart');
+      break;
+    case 'terminal':
+      await openTerminalWithEnv();
+      break;
+    case 'copyEnvPosix':
+      await copyEnvVar('posix');
+      break;
+    case 'copyEnvPowerShell':
+      await copyEnvVar('powershell');
+      break;
+    case 'copyGrpc':
+      await copyText(endpoints.grpcEndpoint);
+      break;
+    case 'copyHttp':
+      await copyText(endpoints.httpEndpoint);
+      break;
+    case 'snippet':
+      await showSnippets();
+      break;
+  }
 }
 
 async function showSnippets(): Promise<void> {
@@ -310,7 +382,7 @@ async function showSnippets(): Promise<void> {
   if (!pick) return;
   const doc = await vscode.workspace.openTextDocument({
     content: pick.snippet.code(ep),
-    language: pick.snippet.language === 'Python' ? 'python' : 'plaintext',
+    language: pick.snippet.languageId,
   });
   await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
 }

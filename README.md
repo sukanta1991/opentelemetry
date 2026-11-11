@@ -10,6 +10,14 @@ Capture OTLP logs, traces, and metrics with a receiver built into the editor. Th
 
 ![OpenTelemetry for VS Code demo: logs, traces, metrics, and service map in the editor](images/screenshots/OpenTelemetry_0_6_0.gif)
 
+## Quick start
+
+1. Click the **OpenTelemetry** icon in the Activity Bar and press **Start Receiver**. The **Get Started** walkthrough opens after install and walks through the same steps.
+2. Connect your app. Press **F5** to debug it from VS Code (the endpoint is added automatically), or click **Connect Your App…** to copy the environment variables, open a ready-made terminal, or get a code snippet.
+3. Your service appears in the sidebar with **Traces**, **Logs** and **Metrics** rows and a **Service Map** row. Click any of them.
+
+The **OTel** item in the status bar opens a menu with the common actions at any time.
+
 ## Why this extension?
 
 Looking at telemetry during development usually means running a Collector and a backend, then switching between the browser and your editor. This extension moves that first round of investigation into VS Code.
@@ -82,8 +90,8 @@ observability backend. You can also send data to both at once (see [Apps running
 
 - OTLP/gRPC on `4317` and OTLP/HTTP (protobuf and JSON) on `4318`, bound to `127.0.0.1`.
 - The endpoint is injected automatically into apps you run or debug from VS Code.
-- Copy the endpoint, environment variables, or a per-language snippet for apps run elsewhere.
-- An **Instances** tree groups apps by `service.name`.
+- Copy the endpoint, environment variables, or a per-language snippet for apps run elsewhere, all from **Connect Your App…**.
+- An **Instances** tree groups apps by `service.name`, with **Traces**, **Logs** and **Metrics** rows under each instance (and a hint when one has no data yet) and a **Service Map** row at the top.
 - Works with any OTLP SDK: **Java, .NET, Go, Node.js, Python, Rust**, and others.
 
 ### AI investigation (optional, off by default)
@@ -132,9 +140,11 @@ Export the rows you care about as OTLP/JSON, plain JSON, or CSV, picking the col
    code --install-extension SukantaSaha.opentelemetry
    ```
 
-2. Open the **OpenTelemetry** view in the Activity Bar and click **Start receiver** (or start it from the status bar item). The status bar then shows the active gRPC and HTTP ports.
+2. Open the **OpenTelemetry** view in the Activity Bar and click **Start Receiver** (or click the **OTel** status bar item and choose **Start Receiver**). The status bar then shows the active gRPC and HTTP ports.
 
-3. Point your application's OTLP exporter at the receiver. Its instance, logs, traces, and metrics appear as data arrives.
+3. Point your application's OTLP exporter at the receiver (**Connect Your App…** lists every way to do it). Its instance, logs, traces, and metrics appear as data arrives.
+
+The **Get Started** walkthrough (**OpenTelemetry: Get Started**) covers these steps and the main features, and ticks them off as you go.
 
 ### Apps launched from VS Code
 
@@ -142,11 +152,14 @@ When you run or debug an app from VS Code, the extension automatically injects t
 
 ### Apps running outside VS Code
 
-Point the exporter at the receiver yourself. Use the **OpenTelemetry: Copy OTLP Endpoint** or **Copy OTLP Endpoint Environment Variable** commands (or **Show Instrumentation Snippet** for a per-language example), then set:
+Point the exporter at the receiver yourself. **OpenTelemetry: Connect Your App…** copies the environment variables (bash/zsh or PowerShell) or an endpoint, opens a terminal with the variables already set, or shows a per-language snippet. The variables it sets:
 
 ```bash
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4317"
-export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+export OTEL_EXPORTER_OTLP_ENDPOINT='http://127.0.0.1:4317'
+export OTEL_EXPORTER_OTLP_PROTOCOL='grpc'
+export OTEL_TRACES_EXPORTER='otlp'
+export OTEL_METRICS_EXPORTER='otlp'
+export OTEL_LOGS_EXPORTER='otlp'
 ```
 
 You can also route data through an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) by adding the receiver as an OTLP exporter target.
@@ -217,7 +230,7 @@ your app ── OTLP ──▶ 127.0.0.1:4317 (gRPC) / 127.0.0.1:4318 (HTTP) ─
 **Telemetry**
 
 - The receiver binds to `127.0.0.1` by default. Setting `otel.host` to another address exposes your telemetry to that network.
-- Live telemetry is held in memory only. It is capped by the `otel.retention.*` settings and dropped when the receiver restarts or you run **Clear Collected Data**.
+- Live telemetry is held in memory only. It is capped by the `otel.retention.*` settings and dropped when VS Code closes or you run **Clear Collected Data**.
 - Telemetry is never written to disk unless you export it yourself.
 - **Saved baselines** are written to the extension's local storage for the workspace (global storage when no folder is open) on this machine. They hold aggregates only: service, dependency, route and operation names, call counts, error counts, sampled latencies, and up to 2 example trace IDs per item, but no attributes, log bodies or span payloads. Unsaved baselines stay in memory. **Export Baseline…** warns that the file contains names and trace IDs before writing it.
 - **Cardinality counters** keep hashes of attribute values (never the values), counts, byte sizes, log patterns and a few example values per key. Examples are redacted with the same rules as the AI features and cut to 120 characters, and everything stays in memory with fixed limits. Baselines also store a cardinality summary: attribute keys, metric names, counts and value classes, but no values or examples. Turning off `otel.cardinality.enabled` frees the counters.
@@ -402,11 +415,13 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | Command | Description |
 | --- | --- |
 | `OpenTelemetry: Start / Stop / Restart Receiver` | Control the embedded OTLP receiver. |
+| `OpenTelemetry: Get Started` | Open the getting-started walkthrough. |
+| `OpenTelemetry: Connect Your App…` | Every way to point an app at the receiver: F5, a terminal with the OTLP environment, copied environment variables or endpoints, code snippets. |
 | `OpenTelemetry: Clear Collected Data` | Drop all in-memory telemetry. |
 | `OpenTelemetry: Copy OTLP Endpoint` | Copy the gRPC or HTTP endpoint. |
-| `OpenTelemetry: Copy OTLP Endpoint Environment Variable` | Copy `OTEL_EXPORTER_OTLP_ENDPOINT=…`. |
+| `OpenTelemetry: Copy OTLP Environment Variables` | Copy the endpoint, protocol and exporter variables for your shell. |
 | `OpenTelemetry: Open Terminal With OTLP Environment` | New terminal pre-set with the OTLP env vars. |
-| `OpenTelemetry: Show Instrumentation Snippet` | Per-language exporter snippets (Node/Python/Go/.NET/Java). |
+| `OpenTelemetry: Show Instrumentation Snippet` | Per-language exporter snippets (environment variables for bash/zsh and PowerShell, Node.js, Python, Go, .NET, Java). |
 | `OpenTelemetry: Open Logs / Traces / Metrics` | Open a panel for the selected instance. |
 | `OpenTelemetry: Export Logs` | Export logs as OTLP/JSON, plain JSON, or CSV. |
 | `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or exported plain JSON file as a read-only instance. |
@@ -430,39 +445,73 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | `OpenTelemetry: Open Cardinality & Cost Analyzer` | Open the analyzer for all live data (also in the Instances view's **…** menu and on the flame status bar item). |
 | `OpenTelemetry: Analyze Cardinality & Cost` | Right-click a service, instance or loaded file in the Instances view to open the analyzer for it. |
 
-Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action. Right-click a trace in the Traces panel for **Export Trace…**.
+Each instance in the tree has **Traces**, **Logs** and **Metrics** rows, plus inline icons and a **Remove Instance** action. The **Service Map** row at the top opens the map. Right-click a trace in the Traces panel for **Export Trace…**. The **OTel** status bar item opens a quick-actions menu.
 
 ## Settings
 
+In the Settings editor, the extension's settings are grouped into the sections below.
+
+### General
+
 | Setting | Default | Description |
 | --- | --- | --- |
+| `otel.useLocalTime` | `true` | Show Logs, Traces, and metric chart timestamps in your local timezone instead of UTC. |
 | `otel.launchOnStartup` | `false` | Start the receiver when VS Code starts. |
+| `otel.overwriteEnvVars` | `true` | Inject the OTLP endpoint into launch/debug configs. |
+
+### Receiver
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `otel.host` | `127.0.0.1` | Bind address. Binding beyond localhost exposes telemetry. |
 | `otel.port.mode` | `fixed` | `fixed` or `random` port assignment. |
 | `otel.port.grpc` | `4317` | OTLP/gRPC port (fixed mode). |
 | `otel.port.http` | `4318` | OTLP/HTTP port (fixed mode). |
-| `otel.host` | `127.0.0.1` | Bind address. Binding beyond localhost exposes telemetry. |
-| `otel.overwriteEnvVars` | `true` | Inject the OTLP endpoint into launch/debug configs. |
-| `otel.useLocalTime` | `true` | Show Logs, Traces, and metric chart timestamps in your local timezone instead of UTC. |
+
+### Retention & Import
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
 | `otel.import.maxFileSize` | `200` | Largest file (MB) accepted by **Import Logs** or **Load Session**. Checked before the file is read. |
 | `otel.import.maxRecords` | `50000` | Most records (spans, logs and metric points) accepted from one import or session. Imported data bypasses retention, so this bounds its memory use. |
+
+### Service Map
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.serviceMap.latencyWarnMs` | `300` | Service map: p95 latency (ms) at or above which a node or call shows a warning. |
 | `otel.serviceMap.latencyCriticalMs` | `1000` | Service map: p95 latency (ms) at or above which a node or call is critical. |
 | `otel.serviceMap.errorRateWarn` | `0.01` | Service map: error rate (0–1) at or above which a node or call shows a warning. |
 | `otel.serviceMap.errorRateCritical` | `0.05` | Service map: error rate (0–1) at or above which a node or call is critical. |
+
+### Service Map Baselines
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.serviceMap.baseline.minSamples` | `20` | Baselines: minimum calls on both sides before a service, call or operation is compared (5–1000). |
 | `otel.serviceMap.baseline.minLatencyChangePct` | `20` | Baselines: a significant p50 or p95 change counts only if it is at least this many percent (and `minLatencyChangeMs`). |
 | `otel.serviceMap.baseline.minLatencyChangeMs` | `5` | Baselines: a significant p50 or p95 change counts only if it is at least this many milliseconds (and `minLatencyChangePct`). |
 | `otel.serviceMap.baseline.minErrorRateChangePp` | `2` | Baselines: a significant error-rate change counts only if it is at least this many percentage points. |
 | `otel.serviceMap.baseline.minFanoutChange` | `1` | Baselines: change in calls per request on a call (e.g. an N+1 query) that counts as a regression or improvement. |
 | `otel.serviceMap.baseline.coverageWarnPct` | `30` | Baselines: warn when at least this percentage of the current services and dependencies are missing from the baseline. `0` turns it off. |
+
+### Cardinality
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.cardinality.enabled` | `true` | Count attribute values, metric series, log patterns and bytes for the cardinality and cost analyzer. Off frees the counters; on counts from that moment. |
 | `otel.cardinality.minDistinct` | `100` | Unique values an attribute needs to be flagged (10–100000); ten times this can be critical. |
 | `otel.cardinality.minDistinctRatio` | `0.1` | Unique values per use (0–1) an attribute also needs to be flagged. |
 | `otel.cardinality.maxSeriesPerMetric` | `500` | Series a metric needs to be flagged (10–1000000); ten times this is critical. |
 | `otel.cardinality.maxSpanNamesPerService` | `100` | Unique span names a service needs to be flagged (5–100000); ten times this is critical. |
+
+### Cost Estimates
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.cost.currency` | `USD` | Currency code shown with prices (display only). |
 | `otel.cost.perGbIngested` | empty | Price per GB ingested (10^9 bytes). Nothing is priced until at least one price is set. |
 | `otel.cost.perMillionSpans` | empty | Price per million spans. |
@@ -472,6 +521,11 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.cost.retentionDays` | empty | Days your backend keeps data (1–3650). |
 | `otel.cost.sizeModel` | `protobuf` | Which payload size per-GB prices apply to: `protobuf` or `json`. |
 | `otel.cost.trafficMultiplier` | `1` | Scales local volume to production (e.g. `500`); not applied to metric series. |
+
+### AI
+
+| Setting | Default | Description |
+| --- | --- | --- |
 | `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
 | `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
 | `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
@@ -491,17 +545,17 @@ Example `settings.json`:
 
 ### The Instances view says the receiver isn't running
 
-The receiver does not start automatically by default. Click **Start receiver** in the Instances view (or the status bar), or set `otel.launchOnStartup` to `true` to start it whenever VS Code launches.
+The receiver does not start automatically by default. Click **Start Receiver** in the OpenTelemetry view (or click the **OTel** status bar item and choose **Start Receiver**), or set `otel.launchOnStartup` to `true` to start it whenever VS Code launches.
 
 ### "Port already in use"
 
-If the configured port is busy, the extension reports the error and offers to retry on randomly assigned ports. You can also set `otel.port.mode` to `random`, or change `otel.port.grpc` / `otel.port.http` to free ports.
+If the configured port is busy, the extension reports the error and offers to retry on randomly assigned ports or open the port settings. You can also set `otel.port.mode` to `random`, or change `otel.port.grpc` / `otel.port.http` to free ports.
 
 ### No telemetry appears
 
-- Confirm the exporter endpoint matches the receiver: **gRPC** uses `4317`, **HTTP** uses `4318`. Set `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` or `http/protobuf`) accordingly.
+- Confirm the exporter endpoint matches the receiver: **gRPC** uses `4317`, **HTTP** uses `4318`. Set `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` or `http/protobuf`) accordingly. **Connect Your App…** shows the current endpoints.
 - For apps launched from VS Code, make sure `otel.overwriteEnvVars` is `true`.
-- For external apps, copy the endpoint with **OpenTelemetry: Copy OTLP Endpoint** and verify your SDK is actually exporting.
+- For external apps, verify your SDK is actually exporting. If a service shows up but its **Traces**, **Logs** or **Metrics** row says *none yet*, hover the row: that signal's exporter is probably not enabled (e.g. `OTEL_LOGS_EXPORTER=otlp`).
 
 > **Note:** the receiver binds to `127.0.0.1` by default. A firewall prompt may appear the first time it starts.
 
@@ -517,7 +571,7 @@ Paths are resolved inside your workspace folders; when only a file name matches,
 
 ### My collected data disappeared
 
-Live telemetry is stored **in memory** and is cleared when the receiver restarts or when you run **Clear Collected Data**. To keep a copy, click **Save Session…** and load the file again later with **Load Session…**. Loaded data survives **Clear Collected Data** and is removed only when you remove it.
+Live telemetry is stored **in memory** and is cleared when VS Code closes or when you run **Clear Collected Data**. Stopping or restarting the receiver keeps it. To keep a copy, click **Save Session…** and load the file again later with **Load Session…**. Loaded data survives **Clear Collected Data** and is removed only when you remove it.
 
 ### The baseline comparison says "Waiting for calls" or "Too few calls to compare"
 

@@ -5,6 +5,33 @@ All notable changes to the **OpenTelemetry for VS Code** extension are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Get Started walkthrough** (opens after install, or **OpenTelemetry: Get Started**): start the receiver, connect your app, explore traces and logs, the service map, baselines, cardinality and the optional Copilot investigation. Steps tick off as you use them.
+- **Connect Your App…** (also a plug button in the OpenTelemetry view): start debugging with F5, open a terminal with the OTLP environment, copy the environment variables for bash/zsh or PowerShell, copy the gRPC or HTTP endpoint, or show a code snippet.
+- The Instances tree shows **Traces**, **Logs** and **Metrics** rows with counts under each instance, and a **Service Map** row at the top (and in loaded files with several services). A signal with no data says *none yet* and its tooltip names the exporter to enable.
+- The **OTel** status bar item opens a quick-actions menu: start or stop the receiver, connect an app, open the service map, traces, logs or metrics, find a trace, copy the endpoint, get started, settings.
+- Traces, Logs and Metrics panels explain an empty list: no data yet (with the exporter to enable), or filters hiding everything, with a **Clear filters** button.
+- **? Syntax** in the Traces query bar shows the query syntax with example queries you can click.
+- A PowerShell environment-variable snippet; snippets open with syntax highlighting for their language.
+
+### Changed
+
+- Clicking the status bar item no longer stops the receiver; it opens the quick-actions menu.
+- Clicking an instance in the tree expands it instead of always opening Logs.
+- The OpenTelemetry view toolbar shows Start/Stop, Connect Your App and Service Map; the other actions moved to its **…** menu (Data, Analyze, Help).
+- Welcome text in the OpenTelemetry view explains the three steps and how to connect an app.
+- Settings are grouped into sections: General, Receiver, Retention & Import, Service Map, Service Map Baselines, Cardinality, Cost Estimates and AI. Setting names and defaults are unchanged.
+- **Copy OTLP Endpoint Environment Variable** is now **Copy OTLP Environment Variables** and copies the endpoint, protocol and the traces, metrics and logs exporters for your shell. **Open Terminal With OTLP Environment** sets the exporters too.
+- Commands that need the receiver offer to start it instead of only warning that it is stopped; receiver start errors offer **Open Settings**.
+
+### Fixed
+
+- The Logs panel showed nothing when filters hid every row; it now says so.
+- An instance removed and re-created under the same ID between tree refreshes could show stale counts.
+
 ## [1.3.0] - 2026-10-31
 
 ### Added

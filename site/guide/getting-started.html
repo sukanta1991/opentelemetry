@@ -73,9 +73,9 @@
       <p>Requires VS Code 1.95 or later.</p>
 
       <h2 id="start">2. Start the receiver</h2>
-      <p>Open the <strong>OpenTelemetry</strong> view in the Activity Bar and click <strong>Start receiver</strong> (or start it from the status bar item). The status bar then shows the active gRPC and HTTP ports.</p>
+      <p>Open the <strong>OpenTelemetry</strong> view in the Activity Bar and click <strong>Start Receiver</strong> (or click the <strong>OTel</strong> status bar item and choose <strong>Start Receiver</strong>). The status bar then shows the active gRPC and HTTP ports.</p>
       <div class="callout info">
-        <p>Want it running all the time? Set <code>otel.launchOnStartup</code> to <code>true</code>.</p>
+        <p>The <strong>Get Started</strong> walkthrough opens after install and covers these steps; reopen it any time with <strong>OpenTelemetry: Get Started</strong>. Want the receiver running all the time? Set <code>otel.launchOnStartup</code> to <code>true</code>.</p>
       </div>
 
       <h2 id="send">3. Send telemetry</h2>
@@ -84,9 +84,12 @@
       <p>When you run or debug an app from VS Code, the extension automatically injects the <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> environment variable so a configured OTLP exporter sends data to the receiver. You can disable this with the <code>otel.overwriteEnvVars</code> setting.</p>
 
       <h3 id="outside-vscode">Apps running outside VS Code</h3>
-      <p>Point the exporter at the receiver yourself. Use the <strong>OpenTelemetry: Copy OTLP Endpoint</strong> or <strong>Copy OTLP Endpoint Environment Variable</strong> commands (or <strong>Show Instrumentation Snippet</strong> for a per-language example), then set:</p>
-      <pre><code>export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4317"
-export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"</code></pre>
+      <p>Point the exporter at the receiver yourself. <strong>OpenTelemetry: Connect Your App…</strong> (also a plug button in the OpenTelemetry view) copies the environment variables for bash/zsh or PowerShell, copies an endpoint, opens a terminal with the variables already set, or shows a per-language snippet. The variables it sets:</p>
+      <pre><code>export OTEL_EXPORTER_OTLP_ENDPOINT='http://127.0.0.1:4317'
+export OTEL_EXPORTER_OTLP_PROTOCOL='grpc'
+export OTEL_TRACES_EXPORTER='otlp'
+export OTEL_METRICS_EXPORTER='otlp'
+export OTEL_LOGS_EXPORTER='otlp'</code></pre>
       <p><strong>OpenTelemetry: Open Terminal With OTLP Environment</strong> opens a new terminal with these already set.</p>
       <p>You can also route data through an <a href="https://opentelemetry.io/docs/collector/" rel="noopener">OpenTelemetry Collector</a> by adding the receiver as an OTLP exporter target, so the same data reaches both your production backend and VS Code.</p>
 
