@@ -40,6 +40,8 @@ import {
   reduceAcrossSeries,
   windowSeries,
 } from './stats';
+import { emptyCase, emptyContent } from './emptyState';
+import { renderEmptyState } from './emptyStateView';
 
 interface LineGraph {
   kind: 'line';
@@ -962,7 +964,8 @@ function renderGraphs(rows: MetricVM[]): void {
 function apply(): void {
   const rows = filtered();
   count.textContent = rows.length + ' of ' + metrics.length + ' metrics';
-  empty.style.display = metrics.length ? 'none' : 'block';
+  const c = emptyCase(false, metrics.length, rows.length);
+  renderEmptyState(empty, c && emptyContent('metrics', c), clearFilters);
   const isGraph = view === 'graph';
   tableWrap.style.display = isGraph ? 'none' : '';
   graphWrap.style.display = isGraph ? '' : 'none';
@@ -993,6 +996,13 @@ function setView(next: 'table' | 'graph'): void {
   view = next;
   persistState();
   apply();
+}
+
+function clearFilters(): void {
+  q.value = '';
+  persistState();
+  apply();
+  q.focus();
 }
 
 if (typeof savedState.query === 'string') q.value = savedState.query;

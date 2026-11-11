@@ -1,7 +1,7 @@
 {
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
-  "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
+  "description": "View OpenTelemetry traces, logs, metrics and a live service map inside VS Code. Built-in OTLP receiver: no Collector, Jaeger or Grafana to run. Jump from spans and logs to code; optional Copilot investigation.",
   "version": "1.3.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
@@ -16,7 +16,7 @@
     "url": "https://github.com/sukanta1991/opentelemetry"
   },
   "sponsor": {
-      "url": "https://github.com/sponsors/sukanta1991"
+    "url": "https://github.com/sponsors/sukanta1991"
   },
   "bugs": {
     "url": "https://github.com/sukanta1991/opentelemetry/issues"
@@ -50,7 +50,18 @@
     "trace viewer",
     "log viewer",
     "copilot",
-    "developer tools"
+    "developer tools",
+    "debugging",
+    "apm",
+    "local development",
+    "troubleshooting",
+    "latency",
+    "performance",
+    "otlp receiver",
+    "trace explorer",
+    "log explorer",
+    "error tracking",
+    "waterfall"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -77,13 +88,106 @@
     "viewsWelcome": [
       {
         "view": "otel.instances",
-        "contents": "The OpenTelemetry receiver is not running.\n[Start receiver](command:otel.start)\n\nApps that export OTLP to the receiver endpoint will appear here once it is running.",
+        "contents": "See your app's traces, logs and metrics here, next to your code. No Collector, Jaeger or Grafana needed.\n1. Start the receiver.\n2. Point your app at it. Debug sessions started with F5 are connected automatically.\n3. Click a service to explore.\n[Start Receiver](command:otel.start)\n[Get Started](command:otel.openWalkthrough)\nHave a saved session file? [Load it](command:otel.loadSession) to explore it without a running app.",
         "when": "!otel.running"
       },
       {
         "view": "otel.instances",
-        "contents": "The OpenTelemetry receiver is running and waiting for data.\nApps that export OTLP to the receiver endpoint will appear here.\n[Copy endpoint](command:otel.copyEndpoint)\n[Stop receiver](command:otel.stop)",
+        "contents": "The receiver is running. Now send telemetry from your app.\nDebug sessions started with F5 get the endpoint automatically. For apps started any other way:\n[Connect Your App…](command:otel.connectApp)\n[Open Terminal With OTLP Environment](command:otel.openTerminalWithEnv)\nDefault endpoints: gRPC 127.0.0.1:4317, HTTP 127.0.0.1:4318. Hover the status bar item for the current ones. OTLP/HTTP exporters also need OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf.\nYour app appears here as soon as its first span, log or metric arrives. [Stop the receiver](command:otel.stop)",
         "when": "otel.running"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "otel.gettingStarted",
+        "title": "Get Started with OpenTelemetry",
+        "description": "Collect and explore traces, logs and metrics from your app without leaving VS Code.",
+        "steps": [
+          {
+            "id": "start",
+            "title": "Start the receiver",
+            "description": "Start the built-in OTLP receiver. Your app sends telemetry to it; nothing leaves your machine.\n[Start Receiver](command:otel.start)",
+            "media": {
+              "markdown": "media/walkthrough/start.md"
+            },
+            "completionEvents": [
+              "onContext:otel.running"
+            ]
+          },
+          {
+            "id": "connect",
+            "title": "Connect your app",
+            "description": "Debug sessions started with F5 are connected automatically. For anything else, copy the environment variables, open a ready-made terminal or get a code snippet.\n[Connect Your App…](command:otel.connectApp)\nThis step completes when the first data arrives.",
+            "media": {
+              "markdown": "media/walkthrough/connect.md"
+            },
+            "completionEvents": [
+              "onContext:otel.hasData"
+            ]
+          },
+          {
+            "id": "explore",
+            "title": "Explore traces and logs",
+            "description": "Each app appears in the OpenTelemetry sidebar. Open its traces to see every request as a waterfall; click a span for its attributes, its logs and, when the SDK records it, the source line that produced it.\n[Open Traces](command:otel.openTraces)\nOr [open logs](command:otel.openLogs) and [metrics](command:otel.openMetrics).",
+            "media": {
+              "image": "media/walkthrough/trace.jpg",
+              "altText": "Trace list above a span waterfall, with the selected span's attributes on the right."
+            },
+            "completionEvents": [
+              "onCommand:otel.openTraces",
+              "onCommand:otel.openLogs",
+              "onCommand:otel.openMetrics"
+            ]
+          },
+          {
+            "id": "serviceMap",
+            "title": "See how your services connect",
+            "description": "The service map draws every service, database and external call your traces touch, with call counts, latency and errors on each connection.\n[Open Service Map](command:otel.openServiceMap)",
+            "media": {
+              "image": "media/walkthrough/service-map.jpg",
+              "altText": "Service map with services as boxes and calls between them as arrows, coloured by health."
+            },
+            "completionEvents": [
+              "onCommand:otel.openServiceMap"
+            ]
+          },
+          {
+            "id": "baseline",
+            "title": "Catch regressions with a baseline",
+            "description": "Mark a baseline before you change code, then compare: the service map highlights calls that got slower, fail more often or are called more times per request. Save a session to share what you collected.\n[Mark Baseline Now](command:otel.baseline.mark)\nOr [save a session](command:otel.saveSession).",
+            "media": {
+              "image": "media/walkthrough/baseline.jpg",
+              "altText": "Service map compared with a baseline: regressed services and calls are marked with an up arrow and their latency change."
+            },
+            "completionEvents": [
+              "onCommand:otel.baseline.mark",
+              "onCommand:otel.saveSession"
+            ]
+          },
+          {
+            "id": "cardinality",
+            "title": "Find costly telemetry",
+            "description": "See which attributes, metric labels and log patterns would multiply your observability bill in production, before you ship.\n[Open Cardinality & Cost Analyzer](command:otel.openCardinality)",
+            "media": {
+              "image": "media/walkthrough/cardinality.jpg",
+              "altText": "Cardinality and cost analyzer listing high-cardinality attributes per service."
+            },
+            "completionEvents": [
+              "onCommand:otel.openCardinality"
+            ]
+          },
+          {
+            "id": "ai",
+            "title": "Ask Copilot (optional)",
+            "description": "Let Copilot investigate errors and slow requests using your collected telemetry. Off by default; secrets are masked and you confirm every tool call.\n[Turn On AI Investigation](command:workbench.action.openSettings?%5B%22otel.ai.enabled%22%5D)",
+            "media": {
+              "markdown": "media/walkthrough/ai.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:otel.ai.enabled"
+            ]
+          }
+        ]
       }
     ],
     "commands": [
@@ -118,7 +222,24 @@
       },
       {
         "command": "otel.copyEnvVar",
-        "title": "Copy OTLP Endpoint Environment Variable",
+        "title": "Copy OTLP Environment Variables",
+        "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel.connectApp",
+        "title": "Connect Your App…",
+        "category": "OpenTelemetry",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "otel.openWalkthrough",
+        "title": "Get Started",
+        "category": "OpenTelemetry",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "otel.showStatusMenu",
+        "title": "Show Quick Actions",
         "category": "OpenTelemetry"
       },
       {
@@ -321,6 +442,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "otel.showStatusMenu",
+          "when": "false"
+        },
+        {
           "command": "otel._revealTrace",
           "when": "false"
         },
@@ -396,49 +521,59 @@
           "group": "navigation@1"
         },
         {
-          "command": "otel.openServiceMap",
+          "command": "otel.connectApp",
           "when": "view == otel.instances",
           "group": "navigation@2"
         },
         {
-          "command": "otel.baseline.menu",
-          "when": "view == otel.instances",
-          "group": "baseline@1"
-        },
-        {
-          "command": "otel.openCardinality",
-          "when": "view == otel.instances && config.otel.cardinality.enabled",
-          "group": "baseline@2"
-        },
-        {
-          "command": "otel.clear",
+          "command": "otel.openServiceMap",
           "when": "view == otel.instances",
           "group": "navigation@3"
         },
         {
-          "command": "otel.importLogs",
+          "command": "otel.clear",
           "when": "view == otel.instances",
-          "group": "navigation@4"
+          "group": "1_data@1"
         },
         {
           "command": "otel.saveSession",
           "when": "view == otel.instances",
-          "group": "navigation@5"
+          "group": "1_data@2"
         },
         {
           "command": "otel.loadSession",
           "when": "view == otel.instances",
-          "group": "navigation@6"
+          "group": "1_data@3"
         },
         {
-          "command": "otel.openSettings",
+          "command": "otel.importLogs",
           "when": "view == otel.instances",
-          "group": "navigation@7"
+          "group": "1_data@4"
         },
         {
           "command": "otel.findTrace",
           "when": "view == otel.instances",
-          "group": "2_find@1"
+          "group": "2_analyze@1"
+        },
+        {
+          "command": "otel.baseline.menu",
+          "when": "view == otel.instances",
+          "group": "2_analyze@2"
+        },
+        {
+          "command": "otel.openCardinality",
+          "when": "view == otel.instances && config.otel.cardinality.enabled",
+          "group": "2_analyze@3"
+        },
+        {
+          "command": "otel.openWalkthrough",
+          "when": "view == otel.instances",
+          "group": "9_help@1"
+        },
+        {
+          "command": "otel.openSettings",
+          "when": "view == otel.instances",
+          "group": "9_help@2"
         }
       ],
       "view/item/context": [
@@ -554,312 +689,357 @@
         }
       ]
     },
-    "configuration": {
-      "title": "OpenTelemetry",
-      "properties": {
-        "otel.useLocalTime": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "Show log, trace and metric chart timestamps in your local timezone instead of UTC."
-        },
-        "otel.launchOnStartup": {
-          "type": "boolean",
-          "default": false,
-          "description": "Start the OpenTelemetry OTLP receiver automatically when VS Code starts."
-        },
-        "otel.port.mode": {
-          "type": "string",
-          "enum": [
-            "random",
-            "fixed"
-          ],
-          "default": "fixed",
-          "description": "Whether to bind the OTLP receiver to fixed ports or randomly assigned ports."
-        },
-        "otel.port.grpc": {
-          "type": "number",
-          "default": 4317,
-          "description": "OTLP/gRPC listen port (used when otel.port.mode is 'fixed')."
-        },
-        "otel.port.http": {
-          "type": "number",
-          "default": 4318,
-          "description": "OTLP/HTTP listen port (used when otel.port.mode is 'fixed')."
-        },
-        "otel.host": {
-          "type": "string",
-          "default": "127.0.0.1",
-          "description": "Address the OTLP receiver binds to. Binding beyond localhost exposes telemetry to your network."
-        },
-        "otel.overwriteEnvVars": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically inject OTEL_EXPORTER_OTLP_ENDPOINT into VS Code launch/debug configurations."
-        },
-        "otel.retention.maxLogsPerInstance": {
-          "type": "number",
-          "default": 5000,
-          "description": "Maximum number of log records retained in memory per instance (oldest dropped first)."
-        },
-        "otel.retention.maxTracesPerInstance": {
-          "type": "number",
-          "default": 2000,
-          "description": "Maximum number of traces retained in memory per instance (oldest dropped first)."
-        },
-        "otel.retention.maxMetricPointsPerSeries": {
-          "type": "number",
-          "default": 500,
-          "description": "Maximum number of time-series data points retained in memory per metric series (oldest dropped first). Controls how far back metric graphs can plot."
-        },
-        "otel.cardinality.enabled": {
-          "type": "boolean",
-          "default": true,
-          "scope": "window",
-          "description": "Count attribute values, metric series, log patterns and bytes as telemetry arrives, for the cardinality and cost analyzer. Counters are kept in memory with fixed limits and survive retention. Turning this off frees them; turning it on counts from that moment."
-        },
-        "otel.cardinality.minDistinct": {
-          "type": "integer",
-          "default": 100,
-          "minimum": 10,
-          "maximum": 100000,
-          "scope": "resource",
-          "markdownDescription": "Cardinality analyzer: a span or log attribute is flagged when it has at least this many unique values **and** at least `#otel.cardinality.minDistinctRatio#` unique values per occurrence. Ten times this value can make it critical."
-        },
-        "otel.cardinality.minDistinctRatio": {
-          "type": "number",
-          "default": 0.1,
-          "minimum": 0,
-          "maximum": 1,
-          "scope": "resource",
-          "markdownDescription": "Cardinality analyzer: minimum unique values per occurrence (0–1) for an attribute to be flagged, so a few hundred values spread over millions of records are not reported."
-        },
-        "otel.cardinality.maxSeriesPerMetric": {
-          "type": "integer",
-          "default": 500,
-          "minimum": 10,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cardinality analyzer: a metric is flagged when it has at least this many series (unique label sets); ten times this value is critical. The label with the most unique values is reported as the driver."
-        },
-        "otel.cardinality.maxSpanNamesPerService": {
-          "type": "integer",
-          "default": 100,
-          "minimum": 5,
-          "maximum": 100000,
-          "scope": "resource",
-          "markdownDescription": "Cardinality analyzer: a service is flagged when it uses at least this many unique span names (or when many of them embed ids); ten times this value is critical."
-        },
-        "otel.cost.currency": {
-          "type": "string",
-          "default": "USD",
-          "pattern": "^[A-Z]{3}$",
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: currency code shown with prices (ISO 4217, e.g. `USD`, `EUR`). Display only; nothing is converted."
-        },
-        "otel.cost.perGbIngested": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: your backend's price per GB ingested (10^9 bytes). Leave empty to skip. No cost is shown until at least one price is set."
-        },
-        "otel.cost.perMillionSpans": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: your backend's price per million spans. Leave empty to skip."
-        },
-        "otel.cost.perMillionLogs": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: your backend's price per million log records. Leave empty to skip."
-        },
-        "otel.cost.perSeriesMonth": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: your backend's price per active metric series per month. Leave empty to skip."
-        },
-        "otel.cost.perGbMonthRetained": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: your backend's storage price per GB per month. Needs `#otel.cost.retentionDays#`. Leave empty to skip."
-        },
-        "otel.cost.retentionDays": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "default": null,
-          "minimum": 1,
-          "maximum": 3650,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: how many days your backend keeps data, for `#otel.cost.perGbMonthRetained#`."
-        },
-        "otel.cost.sizeModel": {
-          "type": "string",
-          "enum": [
-            "protobuf",
-            "json"
-          ],
-          "enumDescriptions": [
-            "Uncompressed OTLP protobuf (gRPC and OTLP/HTTP protobuf exporters).",
-            "OTLP/JSON (OTLP/HTTP JSON exporters)."
-          ],
-          "default": "protobuf",
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: which payload size the per-GB prices apply to."
-        },
-        "otel.cost.trafficMultiplier": {
-          "type": "number",
-          "default": 1,
-          "exclusiveMinimum": 0,
-          "maximum": 1000000,
-          "scope": "resource",
-          "markdownDescription": "Cost estimates: scale local traffic to the volume you expect in production (e.g. `500` if production handles 500× the requests you send locally). Applies to volume, not to metric series."
-        },
-        "otel.import.maxFileSize": {
-          "type": "number",
-          "default": 200,
-          "minimum": 1,
-          "description": "Maximum size, in megabytes, of a file that can be imported or loaded as a session (.json, .jsonl or .ndjson). Larger files are rejected before being read into memory."
-        },
-        "otel.import.maxRecords": {
-          "type": "number",
-          "default": 50000,
-          "minimum": 1,
-          "description": "Maximum number of records accepted from a single import or loaded session (spans, logs and metric points combined). Imported data is exempt from retention limits, so this bounds how much memory one file can consume."
-        },
-        "otel.serviceMap.latencyWarnMs": {
-          "type": "number",
-          "default": 300,
-          "minimum": 0,
-          "scope": "resource",
-          "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.latencyCriticalMs#` are lowered to it."
-        },
-        "otel.serviceMap.latencyCriticalMs": {
-          "type": "number",
-          "default": 1000,
-          "minimum": 0,
-          "scope": "resource",
-          "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
-        },
-        "otel.serviceMap.errorRateWarn": {
-          "type": "number",
-          "default": 0.01,
-          "minimum": 0,
-          "maximum": 1,
-          "scope": "resource",
-          "markdownDescription": "Service map: error rate (0–1, e.g. `0.01` = 1%) at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.errorRateCritical#` are lowered to it."
-        },
-        "otel.serviceMap.errorRateCritical": {
-          "type": "number",
-          "default": 0.05,
-          "minimum": 0,
-          "maximum": 1,
-          "scope": "resource",
-          "markdownDescription": "Service map: error rate (0–1, e.g. `0.05` = 5%) at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
-        },
-        "otel.serviceMap.baseline.minSamples": {
-          "type": "integer",
-          "default": 20,
-          "minimum": 5,
-          "maximum": 1000,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: minimum calls on **both** sides before a service, call or operation is compared. Fewer calls show as “too few calls to compare”."
-        },
-        "otel.serviceMap.baseline.minLatencyChangePct": {
-          "type": "number",
-          "default": 20,
-          "minimum": 0,
-          "maximum": 1000,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many percent **and** at least `#otel.serviceMap.baseline.minLatencyChangeMs#`."
-        },
-        "otel.serviceMap.baseline.minLatencyChangeMs": {
-          "type": "number",
-          "default": 5,
-          "minimum": 0,
-          "maximum": 60000,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many milliseconds **and** at least `#otel.serviceMap.baseline.minLatencyChangePct#` percent."
-        },
-        "otel.serviceMap.baseline.minErrorRateChangePp": {
-          "type": "number",
-          "default": 2,
-          "minimum": 0,
-          "maximum": 100,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: a statistically significant error-rate change counts only if it is at least this many percentage points (e.g. 1% → 3% is 2 points)."
-        },
-        "otel.serviceMap.baseline.minFanoutChange": {
-          "type": "number",
-          "default": 1,
-          "minimum": 0,
-          "maximum": 1000,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: change in calls per request on a call between services (e.g. an N+1 query going from 1 to 3 calls) that counts as a regression or improvement."
-        },
-        "otel.serviceMap.baseline.coverageWarnPct": {
-          "type": "number",
-          "default": 30,
-          "minimum": 0,
-          "maximum": 100,
-          "scope": "resource",
-          "markdownDescription": "Service map baselines: warn when at least this percentage of the services and dependencies with calls now are missing from the baseline (it may come from a different setup). `0` turns the warning off."
-        },
-        "otel.ai.enabled": {
-          "type": "boolean",
-          "default": false,
-          "scope": "application",
-          "markdownDescription": "Allow Copilot and the `@otel` chat participant to read collected telemetry through the `otel_*` tools. Off by default. Data is redacted and sent only to the language model selected in chat, after you confirm each tool call. This is a user setting: workspace settings cannot enable it."
-        },
-        "otel.ai.redactAttributeKeys": {
-          "type": "array",
-          "default": [],
-          "maxItems": 100,
-          "items": {
-            "type": "string",
-            "maxLength": 128
+    "configuration": [
+      {
+        "title": "General",
+        "order": 1,
+        "properties": {
+          "otel.useLocalTime": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "description": "Show log, trace and metric chart timestamps in your local timezone instead of UTC."
           },
-          "markdownDescription": "Extra attribute keys to mask before telemetry is sent to a language model, in addition to the built-in list (authorization, cookie, password, token, secret, api keys, connection strings, …). Matching ignores case, `.`, `-` and `_`, and matches substrings. Built-in keys cannot be removed."
-        },
-        "otel.ai.maxResultItems": {
-          "type": "number",
-          "default": 25,
-          "minimum": 1,
-          "maximum": 200,
-          "description": "Maximum number of items (traces, spans, logs, series, …) a single OpenTelemetry AI tool call may return."
+          "otel.launchOnStartup": {
+            "type": "boolean",
+            "default": false,
+            "description": "Start the OpenTelemetry OTLP receiver automatically when VS Code starts."
+          },
+          "otel.overwriteEnvVars": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically inject OTEL_EXPORTER_OTLP_ENDPOINT into VS Code launch/debug configurations."
+          }
+        }
+      },
+      {
+        "title": "Receiver",
+        "order": 2,
+        "properties": {
+          "otel.port.mode": {
+            "type": "string",
+            "enum": [
+              "random",
+              "fixed"
+            ],
+            "default": "fixed",
+            "description": "Whether to bind the OTLP receiver to fixed ports or randomly assigned ports."
+          },
+          "otel.port.grpc": {
+            "type": "number",
+            "default": 4317,
+            "description": "OTLP/gRPC listen port (used when otel.port.mode is 'fixed')."
+          },
+          "otel.port.http": {
+            "type": "number",
+            "default": 4318,
+            "description": "OTLP/HTTP listen port (used when otel.port.mode is 'fixed')."
+          },
+          "otel.host": {
+            "type": "string",
+            "default": "127.0.0.1",
+            "description": "Address the OTLP receiver binds to. Binding beyond localhost exposes telemetry to your network."
+          }
+        }
+      },
+      {
+        "title": "Retention & Import",
+        "order": 3,
+        "properties": {
+          "otel.retention.maxLogsPerInstance": {
+            "type": "number",
+            "default": 5000,
+            "description": "Maximum number of log records retained in memory per instance (oldest dropped first)."
+          },
+          "otel.retention.maxTracesPerInstance": {
+            "type": "number",
+            "default": 2000,
+            "description": "Maximum number of traces retained in memory per instance (oldest dropped first)."
+          },
+          "otel.retention.maxMetricPointsPerSeries": {
+            "type": "number",
+            "default": 500,
+            "description": "Maximum number of time-series data points retained in memory per metric series (oldest dropped first). Controls how far back metric graphs can plot."
+          },
+          "otel.import.maxFileSize": {
+            "type": "number",
+            "default": 200,
+            "minimum": 1,
+            "description": "Maximum size, in megabytes, of a file that can be imported or loaded as a session (.json, .jsonl or .ndjson). Larger files are rejected before being read into memory."
+          },
+          "otel.import.maxRecords": {
+            "type": "number",
+            "default": 50000,
+            "minimum": 1,
+            "description": "Maximum number of records accepted from a single import or loaded session (spans, logs and metric points combined). Imported data is exempt from retention limits, so this bounds how much memory one file can consume."
+          }
+        }
+      },
+      {
+        "title": "Service Map",
+        "order": 4,
+        "properties": {
+          "otel.serviceMap.latencyWarnMs": {
+            "type": "number",
+            "default": 300,
+            "minimum": 0,
+            "scope": "resource",
+            "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.latencyCriticalMs#` are lowered to it."
+          },
+          "otel.serviceMap.latencyCriticalMs": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 0,
+            "scope": "resource",
+            "markdownDescription": "Service map: p95 latency, in milliseconds, at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
+          },
+          "otel.serviceMap.errorRateWarn": {
+            "type": "number",
+            "default": 0.01,
+            "minimum": 0,
+            "maximum": 1,
+            "scope": "resource",
+            "markdownDescription": "Service map: error rate (0–1, e.g. `0.01` = 1%) at or above which a service, dependency or call is shown as **warning**. Values above `#otel.serviceMap.errorRateCritical#` are lowered to it."
+          },
+          "otel.serviceMap.errorRateCritical": {
+            "type": "number",
+            "default": 0.05,
+            "minimum": 0,
+            "maximum": 1,
+            "scope": "resource",
+            "markdownDescription": "Service map: error rate (0–1, e.g. `0.05` = 5%) at or above which a service, dependency or call is shown as **critical**. Needs at least 5 calls in the time window; fewer calls show at most a warning."
+          }
+        }
+      },
+      {
+        "title": "Service Map Baselines",
+        "order": 5,
+        "properties": {
+          "otel.serviceMap.baseline.minSamples": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 5,
+            "maximum": 1000,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: minimum calls on **both** sides before a service, call or operation is compared. Fewer calls show as “too few calls to compare”."
+          },
+          "otel.serviceMap.baseline.minLatencyChangePct": {
+            "type": "number",
+            "default": 20,
+            "minimum": 0,
+            "maximum": 1000,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many percent **and** at least `#otel.serviceMap.baseline.minLatencyChangeMs#`."
+          },
+          "otel.serviceMap.baseline.minLatencyChangeMs": {
+            "type": "number",
+            "default": 5,
+            "minimum": 0,
+            "maximum": 60000,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: a statistically significant p50 or p95 change counts only if it is at least this many milliseconds **and** at least `#otel.serviceMap.baseline.minLatencyChangePct#` percent."
+          },
+          "otel.serviceMap.baseline.minErrorRateChangePp": {
+            "type": "number",
+            "default": 2,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: a statistically significant error-rate change counts only if it is at least this many percentage points (e.g. 1% → 3% is 2 points)."
+          },
+          "otel.serviceMap.baseline.minFanoutChange": {
+            "type": "number",
+            "default": 1,
+            "minimum": 0,
+            "maximum": 1000,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: change in calls per request on a call between services (e.g. an N+1 query going from 1 to 3 calls) that counts as a regression or improvement."
+          },
+          "otel.serviceMap.baseline.coverageWarnPct": {
+            "type": "number",
+            "default": 30,
+            "minimum": 0,
+            "maximum": 100,
+            "scope": "resource",
+            "markdownDescription": "Service map baselines: warn when at least this percentage of the services and dependencies with calls now are missing from the baseline (it may come from a different setup). `0` turns the warning off."
+          }
+        }
+      },
+      {
+        "title": "Cardinality",
+        "order": 6,
+        "properties": {
+          "otel.cardinality.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "window",
+            "description": "Count attribute values, metric series, log patterns and bytes as telemetry arrives, for the cardinality and cost analyzer. Counters are kept in memory with fixed limits and survive retention. Turning this off frees them; turning it on counts from that moment."
+          },
+          "otel.cardinality.minDistinct": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 10,
+            "maximum": 100000,
+            "scope": "resource",
+            "markdownDescription": "Cardinality analyzer: a span or log attribute is flagged when it has at least this many unique values **and** at least `#otel.cardinality.minDistinctRatio#` unique values per occurrence. Ten times this value can make it critical."
+          },
+          "otel.cardinality.minDistinctRatio": {
+            "type": "number",
+            "default": 0.1,
+            "minimum": 0,
+            "maximum": 1,
+            "scope": "resource",
+            "markdownDescription": "Cardinality analyzer: minimum unique values per occurrence (0–1) for an attribute to be flagged, so a few hundred values spread over millions of records are not reported."
+          },
+          "otel.cardinality.maxSeriesPerMetric": {
+            "type": "integer",
+            "default": 500,
+            "minimum": 10,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cardinality analyzer: a metric is flagged when it has at least this many series (unique label sets); ten times this value is critical. The label with the most unique values is reported as the driver."
+          },
+          "otel.cardinality.maxSpanNamesPerService": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 5,
+            "maximum": 100000,
+            "scope": "resource",
+            "markdownDescription": "Cardinality analyzer: a service is flagged when it uses at least this many unique span names (or when many of them embed ids); ten times this value is critical."
+          }
+        }
+      },
+      {
+        "title": "Cost Estimates",
+        "order": 7,
+        "properties": {
+          "otel.cost.currency": {
+            "type": "string",
+            "default": "USD",
+            "pattern": "^[A-Z]{3}$",
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: currency code shown with prices (ISO 4217, e.g. `USD`, `EUR`). Display only; nothing is converted."
+          },
+          "otel.cost.perGbIngested": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: your backend's price per GB ingested (10^9 bytes). Leave empty to skip. No cost is shown until at least one price is set."
+          },
+          "otel.cost.perMillionSpans": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: your backend's price per million spans. Leave empty to skip."
+          },
+          "otel.cost.perMillionLogs": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: your backend's price per million log records. Leave empty to skip."
+          },
+          "otel.cost.perSeriesMonth": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: your backend's price per active metric series per month. Leave empty to skip."
+          },
+          "otel.cost.perGbMonthRetained": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: your backend's storage price per GB per month. Needs `#otel.cost.retentionDays#`. Leave empty to skip."
+          },
+          "otel.cost.retentionDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "maximum": 3650,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: how many days your backend keeps data, for `#otel.cost.perGbMonthRetained#`."
+          },
+          "otel.cost.sizeModel": {
+            "type": "string",
+            "enum": [
+              "protobuf",
+              "json"
+            ],
+            "enumDescriptions": [
+              "Uncompressed OTLP protobuf (gRPC and OTLP/HTTP protobuf exporters).",
+              "OTLP/JSON (OTLP/HTTP JSON exporters)."
+            ],
+            "default": "protobuf",
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: which payload size the per-GB prices apply to."
+          },
+          "otel.cost.trafficMultiplier": {
+            "type": "number",
+            "default": 1,
+            "exclusiveMinimum": 0,
+            "maximum": 1000000,
+            "scope": "resource",
+            "markdownDescription": "Cost estimates: scale local traffic to the volume you expect in production (e.g. `500` if production handles 500× the requests you send locally). Applies to volume, not to metric series."
+          }
+        }
+      },
+      {
+        "title": "AI",
+        "order": 8,
+        "properties": {
+          "otel.ai.enabled": {
+            "type": "boolean",
+            "default": false,
+            "scope": "application",
+            "markdownDescription": "Allow Copilot and the `@otel` chat participant to read collected telemetry through the `otel_*` tools. Off by default. Data is redacted and sent only to the language model selected in chat, after you confirm each tool call. This is a user setting: workspace settings cannot enable it."
+          },
+          "otel.ai.redactAttributeKeys": {
+            "type": "array",
+            "default": [],
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "markdownDescription": "Extra attribute keys to mask before telemetry is sent to a language model, in addition to the built-in list (authorization, cookie, password, token, secret, api keys, connection strings, …). Matching ignores case, `.`, `-` and `_`, and matches substrings. Built-in keys cannot be removed."
+          },
+          "otel.ai.maxResultItems": {
+            "type": "number",
+            "default": 25,
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Maximum number of items (traces, spans, logs, series, …) a single OpenTelemetry AI tool call may return."
+          }
         }
       }
-    },
+    ],
     "languageModelTools": [
       {
         "name": "otel_listServices",
@@ -898,7 +1078,11 @@
             },
             "status": {
               "type": "string",
-              "enum": ["error", "ok", "unset"],
+              "enum": [
+                "error",
+                "ok",
+                "unset"
+              ],
               "description": "Only traces with a span of this status."
             },
             "minDurationMs": {
@@ -914,7 +1098,11 @@
             },
             "sort": {
               "type": "string",
-              "enum": ["recent", "duration", "errors"],
+              "enum": [
+                "recent",
+                "duration",
+                "errors"
+              ],
               "description": "Row order (default recent). For groups: duration sorts by p95, errors by error count, recent by count."
             },
             "groupBy": {
@@ -953,7 +1141,11 @@
             },
             "status": {
               "type": "string",
-              "enum": ["error", "ok", "unset"],
+              "enum": [
+                "error",
+                "ok",
+                "unset"
+              ],
               "description": "Only spans with this status."
             },
             "minDurationMs": {
@@ -969,12 +1161,20 @@
             },
             "sort": {
               "type": "string",
-              "enum": ["duration", "selfTime"],
+              "enum": [
+                "duration",
+                "selfTime"
+              ],
               "description": "Order by span duration (default) or self-time."
             },
             "groupBy": {
               "type": "string",
-              "enum": ["none", "service", "name", "serviceAndName"],
+              "enum": [
+                "none",
+                "service",
+                "name",
+                "serviceAndName"
+              ],
               "description": "Group spans instead of listing them (default none)."
             },
             "limit": {
@@ -1034,7 +1234,9 @@
               "description": "Optional specific trace to compare against. Omit to use the median of similar recent traces."
             }
           },
-          "required": ["traceId"]
+          "required": [
+            "traceId"
+          ]
         }
       },
       {
@@ -1059,7 +1261,14 @@
             },
             "minSeverity": {
               "type": "string",
-              "enum": ["trace", "debug", "info", "warn", "error", "fatal"],
+              "enum": [
+                "trace",
+                "debug",
+                "info",
+                "warn",
+                "error",
+                "fatal"
+              ],
               "description": "Only logs at or above this severity."
             },
             "text": {
@@ -1195,7 +1404,12 @@
             },
             "scope": {
               "type": "string",
-              "enum": ["all", "services", "calls", "operations"],
+              "enum": [
+                "all",
+                "services",
+                "calls",
+                "operations"
+              ],
               "description": "Which changes to list: all (default), services, calls between services/dependencies, or operations."
             },
             "limit": {
@@ -1233,7 +1447,12 @@
             },
             "signal": {
               "type": "string",
-              "enum": ["all", "spans", "logs", "metrics"],
+              "enum": [
+                "all",
+                "spans",
+                "logs",
+                "metrics"
+              ],
               "description": "Which signal's findings and tables to return: all (default), spans, logs or metrics."
             },
             "limit": {

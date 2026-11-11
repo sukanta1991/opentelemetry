@@ -73,6 +73,7 @@ const fakeVscode = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const appsOf = (provider: any) => provider.getChildren().filter((n: any) => n.kind === 'app');
 const ids = (i: number) => ({ traceId: (i + 1).toString(16).padStart(32, '0'), spanId: (i + 1).toString(16).padStart(16, '0') });
 const uuid = (i: number) => `00000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`;
 
@@ -133,12 +134,12 @@ describe('cardinality surfaces', function () {
     assert.strictEqual(decorations.provideFileDecoration(new Uri('file', `/${encodeURIComponent(key)}`)), undefined, 'other schemes');
     assert.strictEqual(decorations.provideFileDecoration(new Uri('otel-card', '/%E0%A4%A')), undefined, 'malformed path');
 
-    const [app] = provider.getChildren();
+    const [app, quiet] = appsOf(provider);
     const item = provider.getTreeItem(app);
     assert.strictEqual(item.resourceUri.scheme, 'otel-card');
     assert.ok(item.tooltip.value.includes('**Cardinality:** 0 critical, 1 warning'), item.tooltip.value);
     assert.ok(!item.tooltip.value.includes('](command:'), 'names in tooltips are escaped');
-    const quietItem = provider.getTreeItem(provider.getChildren()[1]);
+    const quietItem = provider.getTreeItem(quiet);
     assert.strictEqual(quietItem.tooltip, undefined);
     const inst = provider.getTreeItem(provider.getChildren(app)[0]);
     assert.ok(inst.tooltip.value.startsWith('**api'), 'instance tooltips keep their own text first');
@@ -150,7 +151,7 @@ describe('cardinality surfaces', function () {
 
   it('refreshes only the tree items whose findings changed', async () => {
     const { store, name, evaluator, provider } = setup();
-    const [app] = provider.getChildren();
+    const [app] = appsOf(provider);
     provider.getChildren(app);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e: unknown) => fired.push(e));
@@ -179,10 +180,11 @@ describe('cardinality surfaces', function () {
       metrics: [],
     });
     const provider = new tree.InstancesTreeProvider({ store, onDidChangeState: () => ({ dispose() {} }) });
-    const [app, imported] = provider.getChildren();
+    const [map, app, imported] = provider.getChildren();
     const [session] = provider.getChildren(imported);
-    const [service] = provider.getChildren(session);
+    const [sessionMap, service] = provider.getChildren(session);
     const [inst] = provider.getChildren(service);
+    for (const m of [map, sessionMap]) assert.strictEqual(tree.cardinalityScopeOf(m), undefined);
     assert.deepStrictEqual(tree.cardinalityScopeOf(app), { realm: LIVE_REALM, service: 'api' });
     assert.deepStrictEqual(tree.cardinalityScopeOf(provider.getChildren(app)[0]), { realm: LIVE_REALM, service: 'api', instanceId: 'api::i1' });
     assert.deepStrictEqual(tree.cardinalityScopeOf(session), { realm: sessionId });

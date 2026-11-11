@@ -380,9 +380,11 @@ const STYLE = `${COLUMN_TABLE_CSS}
 
 const BODY = `
 <div class="toolbar">
-  <input id="q" type="text" placeholder="Filter text..." style="min-width:180px" />
+  <input id="q" type="text" placeholder="Filter text..." style="min-width:180px"
+    aria-label="Filter text" title="Matches the message, attribute values and level (case-insensitive)" />
   <select id="level" aria-label="Minimum severity"></select>
-  <input id="attr" type="text" placeholder="attr=value" style="min-width:140px" />
+  <input id="attr" type="text" placeholder="attr=value" style="min-width:140px"
+    aria-label="Attribute filter" title="Matches attribute text, e.g. http.route=/api or just a key (case-insensitive)" />
   <span class="range-picker" title="Time window, measured back from the newest log received">
     <svg class="range-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5A5.5 5.5 0 1 1 8 13.5 5.5 5.5 0 0 1 8 2.5zM7.25 4v4.31l3 1.73.75-1.3-2.25-1.3V4h-1.5z"/></svg>
     <select id="range" aria-label="Time range"></select>

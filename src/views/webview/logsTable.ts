@@ -31,6 +31,7 @@ import {
   cellText,
   collectAttrKeys,
   defaultColumnState,
+  defaultLogsPanelState,
   filterLogs,
   isLogDensity,
   isLogRangeKind,
@@ -48,6 +49,8 @@ import {
   severityClass,
   sortLogs,
 } from './logView';
+import { emptyCase, emptyContent } from './emptyState';
+import { renderEmptyState } from './emptyStateView';
 import { byCodeUnit } from '../../compare';
 
 interface VsCodeApi {
@@ -410,8 +413,26 @@ function apply(preserveScroll = true): void {
   paint();
 
   refreshSelectionUi();
-  empty.style.display = logs.length ? 'none' : 'block';
+  const c = emptyCase(false, logs.length, filtered.length);
+  renderEmptyState(empty, c && emptyContent('logs', c), clearFilters);
   updateRetentionHint();
+}
+
+function clearFilters(): void {
+  const defaults = defaultLogsPanelState();
+  state.query = q.value = defaults.query;
+  state.attrFilter = attr.value = defaults.attrFilter;
+  state.level = defaults.level;
+  level.value = String(defaults.level);
+  state.range = defaults.range;
+  range.value = defaults.range;
+  persist();
+  if (correlate) setCorrelation(null);
+  else {
+    rowsEl.scrollTop = 0;
+    apply(false);
+  }
+  q.focus();
 }
 
 function updateRetentionHint(): void {

@@ -2,6 +2,7 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import * as path from 'path';
+import { configProperties } from './manifestUtil';
 import { ValueClass } from '../../src/store/cardinality/valueClass';
 import {
   CRITICAL_BYTES_SHARE,
@@ -205,7 +206,7 @@ describe('cardinality rules', () => {
 
     it('package.json defaults, ranges and scopes match', () => {
       const pkg = JSON.parse(readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
-      const props = pkg.contributes.configuration.properties;
+      const props = configProperties(pkg);
       for (const k of Object.keys(S) as (keyof typeof S)[]) {
         const p = props[`otel.cardinality.${k}`];
         assert.strictEqual(p.default, S[k], k);

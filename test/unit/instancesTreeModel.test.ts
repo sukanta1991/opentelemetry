@@ -7,6 +7,7 @@ import {
   instanceDescription,
   instanceLabel,
   serviceDescription,
+  signalRows,
   treeShape,
 } from '../../src/views/instancesTreeModel';
 
@@ -186,6 +187,43 @@ describe('instancesTreeModel', () => {
       store.ingestLogs(logs('a', 'i1'));
       const baseline = diffDescriptions(new Map(), allInstances(store)).next;
       assert.deepStrictEqual(diffDescriptions(baseline, allInstances(store)).changed, []);
+    });
+  });
+
+  describe('signalRows', () => {
+    it('lists traces, logs and metrics with counts and open commands', () => {
+      const store = new TelemetryStore();
+      store.ingestLogs(logs('svc', 'i1', 3));
+      store.ingestSpans([
+        { resource: { serviceName: 'svc', serviceInstanceId: 'i1', attrs: {} }, spans: [span('5555555555555555')] },
+      ]);
+      const rows = signalRows(store.getInstance('svc::i1')!);
+      assert.deepStrictEqual(
+        rows.map((r) => [r.signal, r.label, r.count, r.description, r.command, r.icon]),
+        [
+          ['traces', 'Traces', 1, '1', 'otel.openTraces', 'list-tree'],
+          ['logs', 'Logs', 3, '3', 'otel.openLogs', 'output'],
+          ['metrics', 'Metrics', 0, 'none yet', 'otel.openMetrics', 'dashboard'],
+        ]
+      );
+      assert.strictEqual(rows[0].tooltip, 'Open traces for svc');
+    });
+
+    it('explains which exporter to enable for a live signal without data', () => {
+      const store = new TelemetryStore();
+      store.ingestLogs(logs('svc', 'i1'));
+      const [traces, , metrics] = signalRows(store.getInstance('svc::i1')!);
+      assert.match(traces.tooltip, /No traces received from svc yet.*OTEL_TRACES_EXPORTER=otlp/);
+      assert.match(metrics.tooltip, /OTEL_METRICS_EXPORTER=otlp/);
+    });
+
+    it('says "none" without exporter advice for imported data', () => {
+      const store = new TelemetryStore();
+      const id = store.importLogs({ serviceName: 'svc', resourceAttrs: {}, logs: [log('a')], sourceLabel: 'f.json' });
+      const [traces, logRow] = signalRows(store.getInstance(id)!);
+      assert.strictEqual(traces.description, 'none');
+      assert.strictEqual(traces.tooltip, 'This file has no traces for svc.');
+      assert.strictEqual(logRow.description, '1');
     });
   });
 });

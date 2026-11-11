@@ -7,6 +7,8 @@ import { TelemetryStore } from './store/store';
 import { StatusBar } from './status';
 import { OtelSettings, readSettings } from './settings';
 
+const OPEN_SETTINGS = 'Open Settings';
+
 function resolveProtoRoot(extensionPath: string): string {
   const distProto = path.join(extensionPath, 'dist', 'proto');
   if (fs.existsSync(distProto)) return distProto;
@@ -18,6 +20,7 @@ export class OtelController {
   readonly extensionUri: vscode.Uri;
   private readonly receiver: Receiver;
   private readonly statusBar: StatusBar;
+  private startError: string | undefined;
   private readonly onDidChangeStateEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeState = this.onDidChangeStateEmitter.event;
 
@@ -60,7 +63,7 @@ export class OtelController {
     );
     try {
       const ep = await this.receiver.start(settings);
-      this.statusBar.setRunning(ep);
+      this.markRunning(ep);
       await this.setRunningContext(true);
       this.onDidChangeStateEmitter.fire();
     } catch (e: any) {
@@ -68,32 +71,55 @@ export class OtelController {
     }
   }
 
+  /** Message of the last failed start, until the receiver starts or is stopped. */
+  getStartError(): string | undefined {
+    return this.startError;
+  }
+
+  private markRunning(ep: ReceiverEndpoints): void {
+    this.startError = undefined;
+    this.statusBar.setRunning(ep);
+  }
+
+  private markError(message: string): void {
+    this.startError = message;
+    this.statusBar.setError(message);
+  }
+
   private async handleStartError(e: any, settings: OtelSettings): Promise<void> {
     const inUse = e && (e.code === 'EADDRINUSE' || /in use|address already/i.test(String(e?.message)));
-    this.statusBar.setError(String(e?.message ?? e));
+    this.markError(String(e?.message ?? e));
     if (inUse && settings.portMode === 'fixed') {
       const pick = await vscode.window.showErrorMessage(
         `OpenTelemetry: port ${settings.grpcPort}/${settings.httpPort} is in use.`,
-        'Retry on random ports'
+        'Retry on random ports',
+        OPEN_SETTINGS
       );
+      if (pick === OPEN_SETTINGS) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'otel.port');
+        return;
+      }
       if (pick) {
         try {
           const ep = await this.receiver.start({ ...settings, portMode: 'random' });
-          this.statusBar.setRunning(ep);
+          this.markRunning(ep);
           await this.setRunningContext(true);
           this.onDidChangeStateEmitter.fire();
           return;
         } catch (e2: any) {
-          this.statusBar.setError(String(e2?.message ?? e2));
+          this.markError(String(e2?.message ?? e2));
         }
       }
     } else {
-      vscode.window.showErrorMessage(`OpenTelemetry: failed to start receiver: ${e?.message ?? e}`);
+      void vscode.window
+        .showErrorMessage(`OpenTelemetry: failed to start receiver: ${e?.message ?? e}`, OPEN_SETTINGS)
+        .then((pick) => pick && vscode.commands.executeCommand('otel.openSettings'));
     }
   }
 
   async stop(): Promise<void> {
     await this.receiver.stop();
+    this.startError = undefined;
     this.statusBar.setStopped();
     await this.setRunningContext(false);
     this.onDidChangeStateEmitter.fire();

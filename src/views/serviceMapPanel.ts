@@ -462,6 +462,10 @@ const STYLE = `${RANGE_PICKER_CSS}
   }
   #note.error, #empty.error { color: var(--vscode-errorForeground); }
   #empty { position: absolute; inset: 0; }
+  .map-keys {
+    position: absolute; left: 8px; bottom: 6px; pointer-events: none;
+    font-size: 0.85em; color: var(--vscode-descriptionForeground);
+  }
 
   #details {
     flex: 0 0 340px; overflow: auto; padding: 8px 12px;
@@ -519,6 +523,7 @@ const BODY = `
     <svg id="svg" role="group" aria-label="Service dependency map. Tab to a service or call, Enter to show details, Escape to close."><g id="viewport"></g></svg>
     <div id="note" hidden></div>
     <div id="empty" class="empty" hidden></div>
+    <div id="keys" class="map-keys" aria-hidden="true">Drag to pan · Scroll to zoom · Click or Tab + Enter for details · Esc to close</div>
   </div>
   <aside id="details" hidden aria-label="Selection details"></aside>
 </div>

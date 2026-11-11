@@ -4,7 +4,7 @@ import { OtelController } from '../controller';
 import { Application, ImportedSessionView, Instance, LIVE_REALM } from '../store/store';
 import { cardinalityUri } from './cardinalityDecorations';
 import { CardinalityEvaluator, instanceKey, serviceKey, tooltipMarkdown } from './cardinalityEvaluator';
-import { diffDescriptions, instanceDescription, instanceLabel, serviceDescription, treeShape } from './instancesTreeModel';
+import { diffDescriptions, instanceDescription, instanceLabel, serviceDescription, Signal, signalRows, treeShape } from './instancesTreeModel';
 import { PanelScope } from './webview/cardinalityView';
 
 // Full refreshes clear VS Code's handle map, so under load they must be rare.
@@ -41,7 +41,22 @@ export class ImportedServiceNode {
   ) {}
 }
 
-type Node = AppNode | InstanceNode | ImportedRootNode | ImportedSessionNode | ImportedServiceNode;
+// Traces, Logs or Metrics under an instance.
+export class SignalNode {
+  readonly kind = 'signal';
+  constructor(
+    public readonly instance: Instance,
+    public readonly signal: Signal
+  ) {}
+}
+
+// Opens the service map for the live data or for one loaded file.
+export class ServiceMapNode {
+  readonly kind = 'serviceMap';
+  constructor(public readonly realm: string) {}
+}
+
+type Node = AppNode | InstanceNode | ImportedRootNode | ImportedSessionNode | ImportedServiceNode | SignalNode | ServiceMapNode;
 
 /** The cardinality panel scope for a tree node, or undefined for nodes without one. */
 export function cardinalityScopeOf(node: unknown): PanelScope | undefined {
@@ -61,6 +76,9 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly instanceNodes = new Map<string, InstanceNode>();
   private readonly sessionNodes = new Map<string, ImportedSessionNode>();
   private readonly serviceNodes = new Map<string, ImportedServiceNode>();
+  private readonly signalNodes = new Map<string, SignalNode>();
+  private readonly sessionMapNodes = new Map<string, ServiceMapNode>();
+  private readonly liveMapNode = new ServiceMapNode(LIVE_REALM);
   private readonly importedRoot = new ImportedRootNode();
 
   private lastShape = '';
@@ -130,16 +148,22 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
     const imported = store.getImportedInstances();
     const all = [...apps.flatMap((a) => a.instances), ...imported];
     const shape = treeShape(apps, imported);
+    const replaced = all.some((i) => {
+      const cached = this.instanceNodes.get(i.id);
+      return cached !== undefined && cached.instance !== i;
+    });
 
-    if (this.pendingFull || shape !== this.lastShape) {
+    if (this.pendingFull || shape !== this.lastShape || replaced) {
       this.lastShape = shape;
       this.pendingFull = false;
-      const ids = new Set(all.map((i) => i.id));
-      for (const id of this.instanceNodes.keys()) if (!ids.has(id)) this.instanceNodes.delete(id);
+      const current = new Map(all.map((i) => [i.id, i]));
+      for (const [id, n] of this.instanceNodes) if (current.get(id) !== n.instance) this.instanceNodes.delete(id);
+      for (const [key, n] of this.signalNodes) if (current.get(n.instance.id) !== n.instance) this.signalNodes.delete(key);
       const names = new Set(apps.map((a) => a.name));
       for (const name of this.appNodes.keys()) if (!names.has(name)) this.appNodes.delete(name);
       const realms = new Set(imported.map((i) => i.realm));
       for (const id of this.sessionNodes.keys()) if (!realms.has(id)) this.sessionNodes.delete(id);
+      for (const id of this.sessionMapNodes.keys()) if (!realms.has(id)) this.sessionMapNodes.delete(id);
       for (const [key, n] of this.serviceNodes) if (!realms.has(n.sessionId)) this.serviceNodes.delete(key);
       this.lastDescriptions = diffDescriptions(new Map(), all).next;
       this.emitter.fire();
@@ -158,14 +182,62 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
 
   private nodeFor(inst: Instance): InstanceNode {
     let node = this.instanceNodes.get(inst.id);
-    if (!node) {
+    // A removed instance can come back under the same id before the next refresh.
+    if (node?.instance !== inst) {
       node = new InstanceNode(inst);
       this.instanceNodes.set(inst.id, node);
     }
     return node;
   }
 
+  private signalNodesFor(inst: Instance): SignalNode[] {
+    return signalRows(inst).map(({ signal }) => {
+      const key = `${inst.id}::signal::${signal}`;
+      let node = this.signalNodes.get(key);
+      if (node?.instance !== inst) this.signalNodes.set(key, (node = new SignalNode(inst, signal)));
+      return node;
+    });
+  }
+
+  private sessionMapNode(realm: string): ServiceMapNode {
+    let node = this.sessionMapNodes.get(realm);
+    if (!node) this.sessionMapNodes.set(realm, (node = new ServiceMapNode(realm)));
+    return node;
+  }
+
   getTreeItem(node: Node): vscode.TreeItem {
+    if (node.kind === 'signal') {
+      const row = signalRows(node.instance).find((r) => r.signal === node.signal)!;
+      const item = new vscode.TreeItem(row.label, vscode.TreeItemCollapsibleState.None);
+      item.id = `${node.instance.id}::signal::${row.signal}`;
+      item.iconPath = row.count
+        ? new vscode.ThemeIcon(row.icon)
+        : new vscode.ThemeIcon(row.icon, new vscode.ThemeColor('disabledForeground'));
+      item.description = row.description;
+      item.tooltip = row.tooltip;
+      item.contextValue = 'otelSignal';
+      item.command = { command: row.command, title: row.label, arguments: [this.nodeFor(node.instance)] };
+      return item;
+    }
+    if (node.kind === 'serviceMap') {
+      const live = node.realm === LIVE_REALM;
+      let services = 0;
+      if (live) services = this.controller.store.getApplications().length;
+      else {
+        const view = this.controller.store.getImportedSessions().find((v) => v.session.id === node.realm);
+        services = new Set(view?.instances.map((i) => i.serviceName)).size;
+      }
+      const item = new vscode.TreeItem('Service Map', vscode.TreeItemCollapsibleState.None);
+      item.id = `serviceMap::${node.realm}`;
+      item.iconPath = new vscode.ThemeIcon('type-hierarchy');
+      item.description = `${services} service${services === 1 ? '' : 's'}`;
+      item.tooltip = live
+        ? 'How your services call each other, with call counts, latency and errors on every connection.'
+        : 'How the services in this file call each other.';
+      item.contextValue = 'otelServiceMap';
+      item.command = { command: 'otel.openServiceMap', title: 'Open Service Map', arguments: [node] };
+      return item;
+    }
     if (node.kind === 'imported') {
       const files = this.controller.store.getImportedSessions().length;
       const item = new vscode.TreeItem('Imported', vscode.TreeItemCollapsibleState.Expanded);
@@ -216,13 +288,10 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
     const inst = node.instance;
     if (inst.kind === 'imported') {
       const grouped = this.sessionNodes.has(inst.realm);
-      const item = new vscode.TreeItem(
-        grouped ? instanceLabel(inst) : inst.serviceName,
-        vscode.TreeItemCollapsibleState.None
-      );
+      const item = new vscode.TreeItem(grouped ? instanceLabel(inst) : inst.serviceName, vscode.TreeItemCollapsibleState.Collapsed);
       item.iconPath = new vscode.ThemeIcon(grouped ? 'vm' : 'file-symlink-file');
       item.contextValue = 'otelImportedInstance';
-      item.id = inst.id;
+      item.id = `instance::${inst.id}`;
       item.description = instanceDescription(inst, !grouped);
       item.tooltip = new vscode.MarkdownString(
         `**${inst.serviceName}** (imported)\n\n` +
@@ -230,18 +299,12 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
           `- Logs: ${inst.logCount}\n- Spans: ${inst.spanCount}\n- Traces: ${inst.traces.size}\n- Metrics: ${inst.metrics.size}\n\n` +
           'Read-only. Not affected by Clear Collected Data.'
       );
-      const open = inst.logCount || (!inst.traces.size && !inst.metrics.size)
-        ? { command: 'otel.openLogs', title: 'Open Logs' }
-        : inst.traces.size
-          ? { command: 'otel.openTraces', title: 'Open Traces' }
-          : { command: 'otel.openMetrics', title: 'Open Metrics' };
-      item.command = { ...open, arguments: [node] };
       return this.withCardinality(item, instanceKey(inst.id));
     }
-    const item = new vscode.TreeItem(instanceLabel(inst), vscode.TreeItemCollapsibleState.None);
+    const item = new vscode.TreeItem(instanceLabel(inst), vscode.TreeItemCollapsibleState.Collapsed);
     item.iconPath = new vscode.ThemeIcon('vm');
     item.contextValue = 'otelInstance';
-    item.id = inst.id;
+    item.id = `instance::${inst.id}`;
     item.description = instanceDescription(inst);
     item.tooltip = new vscode.MarkdownString(
       `**${inst.serviceName}**\n\n` +
@@ -249,22 +312,18 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
         `- Peer: \`${inst.peer ?? 'n/a'}\`\n` +
         `- Logs: ${inst.logCount}\n- Spans: ${inst.spanCount}\n- Traces: ${inst.traces.size}\n- Metrics: ${inst.metrics.size}`
     );
-    item.command = {
-      command: 'otel.openLogs',
-      title: 'Open Logs',
-      arguments: [node],
-    };
     return this.withCardinality(item, instanceKey(inst.id));
   }
 
   getChildren(node?: Node): Node[] {
     if (!node) {
-      const nodes: Node[] = this.controller.store.getApplications().map((a) => {
+      const apps: Node[] = this.controller.store.getApplications().map((a) => {
         let appNode = this.appNodes.get(a.name);
         if (appNode) appNode.app = a;
         else this.appNodes.set(a.name, (appNode = new AppNode(a)));
         return appNode;
       });
+      const nodes: Node[] = apps.length ? [this.liveMapNode, ...apps] : [];
       if (this.controller.store.getImportedSessions().length) nodes.push(this.importedRoot);
       return nodes;
     }
@@ -288,19 +347,23 @@ export class InstancesTreeProvider implements vscode.TreeDataProvider<Node> {
         else byService.set(inst.serviceName, [inst]);
       }
       const sessionId = node.view.session.id;
-      return [...byService].map(([name, instances]) => {
+      const services: Node[] = [...byService].map(([name, instances]) => {
         const key = `${sessionId}\u0000${name}`;
         let serviceNode = this.serviceNodes.get(key);
         if (serviceNode) serviceNode.instances = instances;
         else this.serviceNodes.set(key, (serviceNode = new ImportedServiceNode(sessionId, name, instances)));
         return serviceNode;
       });
+      return services.length > 1 ? [this.sessionMapNode(sessionId), ...services] : services;
     }
     if (node.kind === 'importedService') {
       return node.instances.map((i) => this.nodeFor(i));
     }
     if (node.kind === 'app') {
       return node.app.instances.map((i) => this.nodeFor(i));
+    }
+    if (node.kind === 'instance') {
+      return this.signalNodesFor(node.instance);
     }
     return [];
   }

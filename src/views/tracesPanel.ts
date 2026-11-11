@@ -356,6 +356,22 @@ const STYLE = `${COLUMN_TABLE_CSS}
     border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-panel-border));
   }
   .q-errors[hidden] { display: none; }
+  .q-help {
+    flex: 0 0 auto; padding: 6px 8px 8px; font-size: 0.9em; max-height: 45vh; overflow: auto;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  }
+  .q-help[hidden] { display: none; }
+  .q-help-cols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .q-help-terms { width: auto; flex: 1 1 420px; }
+  .q-help-terms td { padding: 2px 8px 2px 0; border: none; }
+  .q-help-terms td:first-child { white-space: nowrap; }
+  .q-help-side { flex: 1 1 260px; }
+  .q-help-side p { margin: 2px 0 6px; }
+  .q-help code { font-size: 0.95em; }
+  .q-examples { display: flex; flex-wrap: wrap; gap: 4px; }
+  .q-examples button { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.9em; }
+  #qHelpBtn { flex: 0 0 auto; }
   .toolbar { border-bottom: none; }
   .toolbar + .q-errors, .query-bar { border-bottom: 1px solid var(--vscode-panel-border); }
   .count { margin-left: auto; }
@@ -456,6 +472,34 @@ const BODY = `
   <input id="query" type="text" spellcheck="false" aria-label="Advanced trace query" aria-describedby="qErrors"
     placeholder='Query, e.g. service=checkout status=error dur>200ms http.status_code>=500 "GET /api"'
     title="${QUERY_HELP}" />
+  <button id="qHelpBtn" class="secondary" aria-expanded="false" aria-controls="qHelp" title="Query syntax and examples">? Syntax</button>
+</div>
+<div id="qHelp" class="q-help" role="region" aria-label="Query syntax" hidden>
+  <div class="q-help-cols">
+    <table class="q-help-terms">
+      <tr><td><code>service=checkout</code></td><td>Span's service</td></tr>
+      <tr><td><code>name:users</code> <code>name="GET /api"</code></td><td>Span name contains / equals</td></tr>
+      <tr><td><code>status=error</code></td><td>Span status: error, ok, unset</td></tr>
+      <tr><td><code>kind=server</code></td><td>server, client, internal, producer, consumer</td></tr>
+      <tr><td><code>http.route=/api</code> <code>key!=text</code></td><td>Attribute contains / doesn't contain</td></tr>
+      <tr><td><code>http.status_code&gt;=500</code></td><td>Numeric attribute: &gt; &gt;= &lt; &lt;=</td></tr>
+      <tr><td><code>has:db.system</code> <code>-http.route</code></td><td>Attribute present / absent</td></tr>
+      <tr><td><code>dur&gt;200ms</code> <code>dur&lt;1.5s</code></td><td>Trace duration (us, ms, s, m, h)</td></tr>
+      <tr><td><code>trace:4bf92f</code></td><td>Trace ID contains</td></tr>
+      <tr><td>any word, <code>"a phrase"</code></td><td>Span name or trace ID contains it</td></tr>
+    </table>
+    <div class="q-help-side">
+      <p>All terms must match. Span terms must hold on the <em>same</em> span: <code>service=checkout status=error</code> finds traces where a checkout span failed.</p>
+      <p class="muted">Try an example:</p>
+      <div class="q-examples">
+        <button type="button" class="secondary" data-q="status=error">status=error</button>
+        <button type="button" class="secondary" data-q="dur>500ms">dur&gt;500ms</button>
+        <button type="button" class="secondary" data-q="status=error dur>200ms">status=error dur&gt;200ms</button>
+        <button type="button" class="secondary" data-q="kind=server http.status_code>=500">kind=server http.status_code&gt;=500</button>
+        <button type="button" class="secondary" data-q="has:db.system dur>100ms">has:db.system dur&gt;100ms</button>
+      </div>
+    </div>
+  </div>
 </div>
 <div id="qErrors" class="q-errors" role="status" aria-live="polite" hidden></div>
 <div class="split">
@@ -470,11 +514,11 @@ const BODY = `
   <div class="wf-split">
     <div id="wfMain" class="wf">
       <div class="wf-head">
-        <button id="wfBack" class="secondary" title="Back to the previous trace" hidden>← Back</button>
-        <div id="wfTitle" class="muted wf-title">Select a trace to view its spans.</div>
+        <button id="wfBack" class="secondary" title="Back to the previous trace" aria-label="Back to the previous trace" hidden>← Back</button>
+        <div id="wfTitle" class="muted wf-title">Select a trace to view its spans. Click a span for its attributes, logs and source code.</div>
         <label class="wf-toggle"><input id="wfShowLogs" type="checkbox" /> Show logs</label>
-        <button id="wfViewLogs" class="secondary" disabled>View logs for trace</button>
-        <button id="wfCopy" class="secondary" disabled>Copy trace ID</button>
+        <button id="wfViewLogs" class="secondary" aria-label="View logs for this trace" disabled>View logs for trace</button>
+        <button id="wfCopy" class="secondary" aria-label="Copy trace ID" disabled>Copy trace ID</button>
       </div>
       <div id="wfNote" class="wf-note" role="status" hidden></div>
       <div id="wfTraceLogs" class="bar-row trace-logs" hidden></div>

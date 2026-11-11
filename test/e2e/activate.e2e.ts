@@ -190,6 +190,9 @@ async function main() {
     'otel.removeInstance',
     'otel.showSnippets',
     'otel.openTerminalWithEnv',
+    'otel.connectApp',
+    'otel.openWalkthrough',
+    'otel.showStatusMenu',
     'otel.findTrace',
     'otel.saveSession',
     'otel.loadSession',
@@ -237,6 +240,11 @@ async function main() {
     (a) => a[0] === 'setContext' && a[1] === 'otel.running' && a[2] === true
   );
   assert.ok(runningSet, 'receiver started and set otel.running context');
+  assert.deepStrictEqual(
+    executeLog.filter((a) => a[0] === 'setContext' && a[1] === 'otel.hasData').map((a) => a[2]),
+    [false],
+    'otel.hasData set once at activation'
+  );
 
   // No baseline is active, and activation touched no baseline files (the fs fake only has stat).
   assert.ok(

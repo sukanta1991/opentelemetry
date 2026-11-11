@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// Per-language OTLP instrumentation snippets shown via the "onboard external app" flow.
+// Per-language OTLP instrumentation snippets shown via the "Connect Your App…" flow.
+import { envBlock, envLine, otlpEnv } from './connectApp';
+
 export interface Snippet {
   language: string;
+  /** VS Code language id used to open the snippet with syntax highlighting. */
+  languageId: string;
   title: string;
   code: (endpoint: string) => string;
 }
@@ -9,14 +13,19 @@ export interface Snippet {
 export const SNIPPETS: Snippet[] = [
   {
     language: 'Environment variables',
-    title: 'Environment variables (any SDK)',
-    code: (ep) =>
-      `export OTEL_EXPORTER_OTLP_ENDPOINT="${ep}"\n` +
-      `export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"\n` +
-      `export OTEL_SERVICE_NAME="my-service"`,
+    languageId: 'shellscript',
+    title: 'Environment variables, bash/zsh (any SDK)',
+    code: (ep) => `${envBlock(otlpEnv(ep), 'posix')}\n${envLine('OTEL_SERVICE_NAME', 'my-service', 'posix')}`,
+  },
+  {
+    language: 'Environment variables',
+    languageId: 'powershell',
+    title: 'Environment variables, PowerShell (any SDK)',
+    code: (ep) => `${envBlock(otlpEnv(ep), 'powershell')}\n${envLine('OTEL_SERVICE_NAME', 'my-service', 'powershell')}`,
   },
   {
     language: 'Node.js',
+    languageId: 'javascript',
     title: 'Node.js (@opentelemetry/sdk-node)',
     code: (ep) =>
       `import { NodeSDK } from '@opentelemetry/sdk-node';\n` +
@@ -28,6 +37,7 @@ export const SNIPPETS: Snippet[] = [
   },
   {
     language: 'Python',
+    languageId: 'python',
     title: 'Python (opentelemetry-sdk)',
     code: (ep) =>
       `from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n` +
@@ -35,6 +45,7 @@ export const SNIPPETS: Snippet[] = [
   },
   {
     language: 'Go',
+    languageId: 'go',
     title: 'Go (otlptracegrpc)',
     code: (ep) =>
       `exporter, _ := otlptracegrpc.New(ctx,\n` +
@@ -43,6 +54,7 @@ export const SNIPPETS: Snippet[] = [
   },
   {
     language: '.NET',
+    languageId: 'csharp',
     title: '.NET (OpenTelemetry)',
     code: (ep) =>
       `builder.Services.AddOpenTelemetry()\n` +
@@ -50,6 +62,7 @@ export const SNIPPETS: Snippet[] = [
   },
   {
     language: 'Java',
+    languageId: 'plaintext',
     title: 'Java (autoconfigure)',
     code: (ep) => `-Dotel.exporter.otlp.endpoint=${ep} -Dotel.exporter.otlp.protocol=grpc`,
   },

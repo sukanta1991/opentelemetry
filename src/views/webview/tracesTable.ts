@@ -17,6 +17,7 @@ import {
   TraceColumnState,
   TraceQueryInput,
   TraceRow,
+  defaultQueryInput,
   defaultTraceColumns,
   loadTracesPanelState,
   moveTraceColumn,
@@ -29,6 +30,8 @@ import {
 } from './traceView';
 import { TIME_RANGE_LABEL, TIME_RANGE_OPTIONS, isTimeRangeKind } from './timeRange';
 import { WaterfallMessage, createWaterfallView } from './waterfallView';
+import { emptyCase, emptyContent } from './emptyState';
+import { renderEmptyState } from './emptyStateView';
 import { byCodeUnit } from '../../compare';
 
 interface VsCodeApi {
@@ -77,6 +80,8 @@ const maxInput = byId<HTMLInputElement>('maxMs');
 const traceIdInput = byId<HTMLInputElement>('traceIdQ');
 const rangeSel = byId<HTMLSelectElement>('range');
 const queryInput = byId<HTMLInputElement>('query');
+const qHelpBtn = byId<HTMLButtonElement>('qHelpBtn');
+const qHelp = byId<HTMLDivElement>('qHelp');
 const columnsBtn = byId<HTMLButtonElement>('columnsBtn');
 const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
@@ -189,6 +194,28 @@ rangeSel.addEventListener('change', () => {
   sendQuery();
 });
 
+function setQueryHelp(open: boolean): void {
+  qHelp.hidden = !open;
+  qHelpBtn.setAttribute('aria-expanded', String(open));
+}
+
+qHelpBtn.addEventListener('click', () => setQueryHelp(qHelp.hidden));
+qHelp.addEventListener('click', (e) => {
+  const example = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-q]');
+  if (!example) return;
+  queryInput.value = example.dataset.q ?? '';
+  queryInput.dispatchEvent(new Event('input'));
+  queryInput.focus();
+});
+for (const target of [qHelp, qHelpBtn, queryInput] as HTMLElement[]) {
+  target.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || qHelp.hidden) return;
+    e.stopPropagation();
+    setQueryHelp(false);
+    qHelpBtn.focus();
+  });
+}
+
 function renderErrors(errors: { token: string; message: string }[]): void {
   qErrors.hidden = !errors.length;
   qErrors.textContent = errors.length
@@ -297,12 +324,25 @@ function apply(): void {
   view = sortTraces(traces.slice(), state.sort);
   paint();
   count.textContent = view.length === total ? `${total} traces` : `${view.length} of ${total} traces`;
-  empty.style.display = view.length ? 'none' : 'block';
-  empty.textContent = gone
-    ? 'This instance is no longer available.'
-    : total
-      ? 'No traces match the current filters.'
-      : 'Waiting for traces…';
+  const c = emptyCase(gone, total, view.length);
+  renderEmptyState(empty, c && emptyContent('traces', c), clearFilters);
+}
+
+function clearFilters(): void {
+  state.input = defaultQueryInput();
+  nameInput.value = '';
+  statusSel.value = '';
+  kindSel.value = '';
+  attrInput.value = '';
+  minInput.value = '';
+  maxInput.value = '';
+  traceIdInput.value = '';
+  queryInput.value = '';
+  rangeSel.value = state.input.range;
+  renderServiceOptions();
+  clearTimeout(debounce);
+  sendQuery();
+  queryInput.focus();
 }
 
 let scrollScheduled = false;
