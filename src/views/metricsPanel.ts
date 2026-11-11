@@ -74,7 +74,7 @@ export class MetricsPanel {
         bars: m.type === 'histogram' ? histogramBars(m) ?? undefined : undefined,
         buckets: m.type === 'histogram' ? histogramBuckets(m) ?? undefined : undefined,
       }));
-    this.panel.webview.postMessage({ type: 'data', metrics });
+    this.panel.webview.postMessage({ type: 'data', metrics, imported: inst.kind === 'imported' });
   }
 
   private dispose(): void {

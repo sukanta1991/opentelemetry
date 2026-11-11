@@ -52,6 +52,7 @@ let traces: TraceRow[] = [];
 let view: TraceRow[] = [];
 let total = 0;
 let gone = false;
+let imported = false;
 let services: string[] = [];
 let attrKeys: string[] = [];
 let selected = '';
@@ -325,7 +326,7 @@ function apply(): void {
   paint();
   count.textContent = view.length === total ? `${total} traces` : `${view.length} of ${total} traces`;
   const c = emptyCase(gone, total, view.length);
-  renderEmptyState(empty, c && emptyContent('traces', c), clearFilters);
+  renderEmptyState(empty, c && emptyContent('traces', c, imported), clearFilters);
 }
 
 function clearFilters(): void {
@@ -680,6 +681,7 @@ interface ListMessage {
   attrKeys?: string[];
   errors?: { token: string; message: string }[];
   gone?: boolean;
+  imported?: boolean;
 }
 
 interface TimeZoneMessage {
@@ -700,6 +702,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     traces = m.traces;
     total = m.total ?? m.traces.length;
     gone = m.gone === true;
+    imported = m.imported === true;
     const nextServices = m.services ?? [];
     if (nextServices.join('\u0000') !== services.join('\u0000')) {
       services = nextServices;

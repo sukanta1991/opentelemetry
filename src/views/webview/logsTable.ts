@@ -99,6 +99,8 @@ let indexBySeq = new Map<number, number>();
 let winStart = 0;
 let winEnd = 0;
 let estimate = DEFAULT_ROW_HEIGHT;
+// Loaded from a file: an empty list means the file has no logs, not a missing exporter.
+let imported = false;
 
 const rowsEl = document.querySelector<HTMLDivElement>('.rows') as HTMLDivElement;
 const tableEl = rowsEl.querySelector('table') as HTMLTableElement;
@@ -414,7 +416,7 @@ function apply(preserveScroll = true): void {
 
   refreshSelectionUi();
   const c = emptyCase(false, logs.length, filtered.length);
-  renderEmptyState(empty, c && emptyContent('logs', c), clearFilters);
+  renderEmptyState(empty, c && emptyContent('logs', c, imported), clearFilters);
   updateRetentionHint();
 }
 
@@ -1172,6 +1174,8 @@ window.addEventListener('message', (e: MessageEvent) => {
     pauseBtn.hidden = m.readOnly === true;
     roBadge.hidden = m.readOnly !== true;
     if (m.readOnly) roBadge.textContent = m.source ? `Imported · ${m.source}` : 'Imported';
+    imported = m.readOnly === true;
+    apply();
     return;
   }
   if (m?.type === 'promptExport') {

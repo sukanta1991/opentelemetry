@@ -97,6 +97,8 @@ const KIND_LABEL: Record<ChartKind, string> = {
 type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
+let gone = false;
+let imported = false;
 let view: 'table' | 'graph' = 'table';
 // The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
 let useLocalTime = document.body.dataset.useLocalTime !== 'false';
@@ -964,8 +966,8 @@ function renderGraphs(rows: MetricVM[]): void {
 function apply(): void {
   const rows = filtered();
   count.textContent = rows.length + ' of ' + metrics.length + ' metrics';
-  const c = emptyCase(false, metrics.length, rows.length);
-  renderEmptyState(empty, c && emptyContent('metrics', c), clearFilters);
+  const c = emptyCase(gone, metrics.length, rows.length);
+  renderEmptyState(empty, c && emptyContent('metrics', c, imported), clearFilters);
   const isGraph = view === 'graph';
   tableWrap.style.display = isGraph ? 'none' : '';
   graphWrap.style.display = isGraph ? '' : 'none';
@@ -1096,6 +1098,8 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
   if (m && m.type === 'data') {
     metrics = m.metrics || [];
+    gone = m.gone === true;
+    imported = m.imported === true;
     apply();
   }
 });

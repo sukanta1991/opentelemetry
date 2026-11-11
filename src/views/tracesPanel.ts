@@ -187,6 +187,7 @@ export class TracesPanel {
       services: [...services].sort(byCodeUnit),
       attrKeys: collectRootAttrKeys(entries.map((e) => e.summary)),
       errors,
+      imported: inst.kind === 'imported',
     });
   }
 

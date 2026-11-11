@@ -26,4 +26,15 @@ describe('emptyState', () => {
     assert.strictEqual(emptyContent('metrics', 'none').code, 'OTEL_METRICS_EXPORTER=otlp');
     assert.match(emptyContent('logs', 'none').hint!, /logging bridge/);
   });
+
+  it('says the file has no data instead of giving exporter advice for imported instances', () => {
+    for (const signal of ['traces', 'logs', 'metrics'] as const) {
+      assert.deepStrictEqual(emptyContent(signal, 'none', true), {
+        title: `This file has no ${signal} for this service.`,
+        clear: false,
+      });
+      assert.strictEqual(emptyContent(signal, 'filtered', true).clear, true);
+      assert.strictEqual(emptyContent(signal, 'gone', true).title, 'This instance is no longer available.');
+    }
+  });
 });

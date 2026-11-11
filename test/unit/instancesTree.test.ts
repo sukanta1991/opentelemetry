@@ -197,4 +197,44 @@ describe('InstancesTreeProvider', () => {
     const signals = tree.getChildren(inst).map((n: any) => tree.getTreeItem(n).description);
     assert.deepStrictEqual(signals, ['none', '1', 'none']);
   });
+
+  it('refreshes only changed instances when nothing was added or replaced', () => {
+    const [a1] = instancesOf(live()[0]);
+    tree.refresh();
+    tree.emitter.fired.length = 0;
+    store.ingestLogs([{ resource: resource('api', 'a1'), logs: [log('z')] }]);
+    tree.flush();
+    assert.deepStrictEqual(tree.emitter.fired, [[a1]]);
+  });
+
+  it('refreshes fully when an instance is re-created under the same id', () => {
+    instancesOf(live()[0]);
+    tree.refresh();
+    tree.emitter.fired.length = 0;
+    store.removeInstance('api::a1');
+    store.ingestLogs([{ resource: resource('api', 'a1'), logs: [log('again')] }]);
+    tree.flush();
+    assert.deepStrictEqual(tree.emitter.fired, [undefined]);
+  });
+
+  it('drops cached apps and loaded-file rows once they are gone', () => {
+    const [, worker] = live();
+    const [imported] = tree.getChildren().filter((n: any) => n.kind === 'imported');
+    tree.getChildren(tree.getChildren(imported)[0]);
+    assert.strictEqual(tree.sessionMapNodes.size, 1);
+    for (const w of instancesOf(worker)) store.removeInstance(w.instance.id);
+    store.removeSession(sessionId);
+    tree.refresh();
+    assert.ok(!tree.appNodes.has('worker'));
+    assert.strictEqual(tree.sessionMapNodes.size, 0);
+    assert.strictEqual(tree.sessionNodes.size, 0);
+  });
+
+  it('counts services in the map rows', () => {
+    store.removeInstance('worker::w1');
+    store.removeInstance('worker::w2');
+    const [map] = tree.getChildren();
+    assert.strictEqual(tree.getTreeItem(map).description, '1 service');
+    assert.strictEqual(tree.getTreeItem(new mod.ServiceMapNode('missing')).description, '0 services');
+  });
 });

@@ -40,7 +40,8 @@ const NONE: Record<EmptySignal, EmptyContent> = {
   },
 };
 
-export function emptyContent(signal: EmptySignal, c: EmptyCase): EmptyContent {
+/** `imported`: the instance comes from a loaded file, so exporter advice does not apply. */
+export function emptyContent(signal: EmptySignal, c: EmptyCase, imported = false): EmptyContent {
   if (c === 'gone') {
     return {
       title: 'This instance is no longer available.',
@@ -49,5 +50,6 @@ export function emptyContent(signal: EmptySignal, c: EmptyCase): EmptyContent {
     };
   }
   if (c === 'filtered') return { title: `No ${signal} match the current filters.`, clear: true };
+  if (imported) return { title: `This file has no ${signal} for this service.`, clear: false };
   return NONE[signal];
 }
