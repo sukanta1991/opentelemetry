@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "View OpenTelemetry traces, logs, metrics and a live service map inside VS Code. Built-in OTLP receiver: no Collector, Jaeger or Grafana to run. Jump from spans and logs to code; optional Copilot investigation.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "Apache-2.0",
